@@ -12,8 +12,8 @@ import { useZoom } from "@/lib/useZoom";
 import { AgentNotificationsBridge } from "@/modules/agents";
 import {
   AgentRunBridge,
-  AiMiniWindow,
   LocalAgentNotificationsBridge,
+  RightPanel,
   SelectionAskAi,
   useAiBootstrap,
   useAiLiveBridge,
@@ -58,6 +58,7 @@ import {
   useSourceControlContext,
 } from "@/modules/source-control";
 import { StatusBar } from "@/modules/statusbar";
+import type { PanelImperativeHandle } from "react-resizable-panels";
 import {
   useTabs,
   useWindowTitle,
@@ -245,6 +246,7 @@ export default function App() {
     toggleExplorerFocus,
   } = useSidebarPanel(explorerRef);
 
+
   const [newEditorOpen, setNewEditorOpen] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [paletteInitialMode, setPaletteInitialMode] = useState<
@@ -257,16 +259,28 @@ export default function App() {
     },
     [],
   );
-  const miniOpen = useChatStore((s) => s.mini.open);
-  const miniPresence = usePresence(miniOpen, 200);
-  const openMini = useChatStore((s) => s.openMini);
   const focusInput = useChatStore((s) => s.focusInput);
-  const openPanel = useChatStore((s) => s.openPanel);
-  const panelOpen = useChatStore((s) => s.panelOpen);
+  const openRightPanel = useChatStore((s) => s.openRightPanel);
+  const rightPanelOpen = useChatStore((s) => s.rightPanelOpen);
+  const toggleRightPanel = useChatStore((s) => s.toggleRightPanel);
+
+  const rightPanelRef = useRef<PanelImperativeHandle | null>(null);
+  const RIGHT_PANEL_SIZE = "30%";
+
+  // Sync right panel collapse/expand with store state
+  useEffect(() => {
+    const p = rightPanelRef.current;
+    if (!p) return;
+    if (rightPanelOpen && p.getSize().asPercentage <= 0) {
+      p.resize(RIGHT_PANEL_SIZE);
+    } else if (!rightPanelOpen && p.getSize().asPercentage > 0) {
+      p.collapse();
+    }
+  }, [rightPanelOpen]);
   const setLive = useChatStore((s) => s.setLive);
   const respondToApproval = useChatStore((s) => s.respondToApproval);
 
-  const { hasComposer, keysLoaded } = useAiBootstrap();
+  const { hasComposer } = useAiBootstrap();
 
   const activeTab = tabs.find((t) => t.id === activeId);
   const isTerminalTab = activeTab?.kind === "terminal";
@@ -379,18 +393,18 @@ export default function App() {
     return null;
   }, [tabs, activeId]);
 
-  const togglePanelAndFocus = useCallback(() => {
+  const toggleRightPanelAndFocus = useCallback(() => {
     if (!hasComposer) {
       void openSettingsWindow("models");
       return;
     }
-    if (panelOpen) {
-      useChatStore.getState().closePanel();
+    if (rightPanelOpen) {
+      useChatStore.getState().closeRightPanel();
     } else {
-      openPanel();
+      openRightPanel();
       focusInput(null);
     }
-  }, [hasComposer, panelOpen, openPanel, focusInput]);
+  }, [hasComposer, rightPanelOpen, openRightPanel, focusInput]);
 
   const attachSelection = useChatStore((s) => s.attachSelection);
 
@@ -405,10 +419,10 @@ export default function App() {
       window.dispatchEvent(
         new CustomEvent<string>("terax:ai-attach-file", { detail: path }),
       );
-      openPanel();
+      openRightPanel();
       focusInput(null);
     },
-    [hasComposer, openPanel, focusInput],
+    [hasComposer, openRightPanel, focusInput],
   );
 
   const askFromSelection = useCallback(() => {
@@ -613,8 +627,9 @@ export default function App() {
       "blocks.prev": () => navigateFocusedBlocks(-1),
       "blocks.next": () => navigateFocusedBlocks(1),
       "search.focus": () => searchInlineRef.current?.focus(),
-      "ai.toggle": togglePanelAndFocus,
+      "ai.toggle": toggleRightPanelAndFocus,
       "ai.askSelection": askFromSelection,
+      "panel.toggleRight": toggleRightPanel,
       "settings.open": () => void openSettingsWindow(),
       "sidebar.toggle": toggleSidebar,
       "explorer.focus": toggleExplorerFocus,
@@ -639,7 +654,7 @@ export default function App() {
       splitActivePaneInActiveTab,
       focusNextPaneInTab,
       toggleSourceControl,
-      togglePanelAndFocus,
+      toggleRightPanelAndFocus,
       askFromSelection,
       toggleSidebar,
       toggleExplorerFocus,
@@ -764,9 +779,9 @@ export default function App() {
   );
 
   const onActivateLocalAgent = useCallback(() => {
-    openPanel();
+    openRightPanel();
     focusInput(null);
-  }, [openPanel, focusInput]);
+  }, [openRightPanel, focusInput]);
 
   const handleLeafExit = useCallback(
     (leafId: number, _code: number) => {
@@ -927,7 +942,7 @@ export default function App() {
             focusSearch: () => searchInlineRef.current?.focus(),
             focusExplorerSearch: () => explorerRef.current?.focusSearch(),
             toggleSidebar,
-            toggleAi: togglePanelAndFocus,
+            toggleAi: toggleRightPanelAndFocus,
             askAiSelection: askFromSelection,
             openSettings: () => void openSettingsWindow(),
             openKeyboardShortcuts: () => void openSettingsWindow("shortcuts"),
@@ -954,7 +969,7 @@ export default function App() {
       handleCloseTabOrPane,
       splitActivePaneInActiveTab,
       toggleSidebar,
-      togglePanelAndFocus,
+      toggleRightPanelAndFocus,
       askFromSelection,
       activeSpaceId,
       handleNewSpace,
@@ -1015,6 +1030,7 @@ export default function App() {
               onPin={pinTab}
               onRename={handleRenameTab}
               onToggleSidebar={toggleSidebar}
+              onToggleRightPanel={toggleRightPanel}
               onOpenCommandPalette={() => openCommandPalette("commands")}
               onActivateAgent={onActivateAgent}
               onActivateLocalAgent={onActivateLocalAgent}
@@ -1030,6 +1046,7 @@ export default function App() {
               orientation="horizontal"
               className="min-h-0 flex-1"
             >
+              {/* LEFT SIDEBAR */}
               <ResizablePanel
                 id="sidebar"
                 panelRef={sidebarRef}
@@ -1075,8 +1092,11 @@ export default function App() {
                   />
                 </div>
               </ResizablePanel>
+
               <ResizableHandle withHandle />
-              <ResizablePanel id="workspace" defaultSize="78%" minSize="30%">
+
+              {/* CENTER */}
+              <ResizablePanel id="center" defaultSize="78%" minSize="30%">
                 <div className="flex h-full min-h-0 flex-col">
                   <div className="relative min-h-0 flex-1">
                     <WorkspaceSurface
@@ -1100,19 +1120,29 @@ export default function App() {
                       onSetMarkdownView={setMarkdownView}
                     />
                   </div>
-
                   <WorkspaceInputBar
                     isBlockTab={isBlockTab}
                     isTerminalTab={isTerminalTab}
                     activeLeafId={activeLeafId}
                     cwd={activeCwd}
                     home={home}
-                    hasComposer={hasComposer}
-                    panelOpen={panelOpen}
-                    keysLoaded={keysLoaded}
-                    onConnect={() => void openSettingsWindow("models")}
                   />
                 </div>
+              </ResizablePanel>
+
+              <ResizableHandle withHandle />
+
+              {/* RIGHT PANEL — AI */}
+              <ResizablePanel
+                id="right-panel"
+                panelRef={rightPanelRef}
+                collapsible
+                collapsedSize={0}
+                defaultSize="30%"
+                minSize="20%"
+                maxSize="50%"
+              >
+                {hasComposer ? <RightPanel /> : null}
               </ResizablePanel>
             </ResizablePanelGroup>
           </main>
@@ -1124,7 +1154,6 @@ export default function App() {
               home={home}
               onCd={sendCd}
               onWorkspaceChange={switchWorkspace}
-              onOpenMini={openMini}
               hasComposer={hasComposer}
               privateActive={
                 activeTab?.kind === "terminal" && activeTab.private === true
@@ -1149,9 +1178,6 @@ export default function App() {
             </>
           ) : null}
 
-          {hasComposer && miniPresence.mounted ? (
-            <AiMiniWindow state={miniPresence.state} />
-          ) : null}
           {askPresence.mounted ? (
             <SelectionAskAi
               state={askPresence.state}

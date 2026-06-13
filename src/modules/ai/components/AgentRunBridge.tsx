@@ -64,7 +64,7 @@ function Bridge({
     chat,
   });
   const patch = useChatStore((s) => s.patchAgentMeta);
-  const openMini = useChatStore((s) => s.openMini);
+  const openRightPanel = useChatStore((s) => s.openRightPanel);
   const persistMessages = useChatStore((s) => s.persistMessages);
   const setApprovalResponder = useChatStore((s) => s.setApprovalResponder);
 
@@ -121,8 +121,8 @@ function Bridge({
   }, [status, approvalsPending, patch]);
 
   useEffect(() => {
-    if (approvalsPending > 0) openMini();
-  }, [approvalsPending, openMini]);
+    if (approvalsPending > 0) openRightPanel();
+  }, [approvalsPending, openRightPanel]);
 
   // ---- AI diff tab management ----------------------------------------------
   // We track which approvalIds have already opened a tab so re-renders don't

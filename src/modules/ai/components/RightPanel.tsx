@@ -1,3 +1,4 @@
+import { Button } from "@/components/ui/button";
 import {
   Context,
   ContextContent,
@@ -6,7 +7,6 @@ import {
   ContextContentHeader,
   ContextTrigger,
 } from "@/components/ai-elements/context";
-import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -27,12 +27,9 @@ import {
   TerminalIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import type { PresenceState } from "@/lib/usePresence";
 import { useEffect, useMemo } from "react";
 import { estimateCost, getModel, getModelContextLimit, type ModelId } from "../config";
-import type { ResizeDir } from "../lib/miniWindowGeometry";
 import type { SessionMeta } from "../lib/sessions";
-import { useMiniWindowGeometry } from "../lib/useMiniWindowGeometry";
 import { useAgentsStore } from "../store/agentsStore";
 import { useChatStore } from "../store/chatStore";
 import { getOrCreateChat } from "../store/chatRuntime";
@@ -40,6 +37,7 @@ import { usePreferencesStore } from "@/modules/settings/preferences";
 import { usePlanStore } from "../store/planStore";
 import { AgentSwitcher } from "./AgentSwitcher";
 import { AiChatView } from "./AiChat";
+import { AiComposerInput } from "./AiComposerInput";
 import { PlanDiffReview } from "./PlanDiffReview";
 import { TodoStrip } from "./TodoStrip";
 
@@ -64,16 +62,9 @@ const SUGGESTIONS = [
   },
 ];
 
-export function AiMiniWindow({ state }: { state: PresenceState }) {
-  const closeMini = useChatStore((s) => s.closeMini);
+export function RightPanel() {
+  const closeRightPanel = useChatStore((s) => s.closeRightPanel);
   const sessionId = useChatStore((s) => s.activeSessionId);
-  const openPanel = useChatStore((s) => s.openPanel);
-  const expandToPanel = () => {
-    closeMini();
-    openPanel();
-  };
-
-  const { ref, onHeaderPointerDown, startResize } = useMiniWindowGeometry();
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -81,93 +72,31 @@ export function AiMiniWindow({ state }: { state: PresenceState }) {
         const target = e.target as HTMLElement | null;
         const tag = target?.tagName;
         if (tag === "INPUT" || tag === "TEXTAREA") return;
-        closeMini();
+        closeRightPanel();
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [closeMini]);
+  }, [closeRightPanel]);
 
   return (
-    <div
-      ref={ref}
-      data-state={state}
-      data-ai-mini-window
-      className={cn(
-        "no-scrollbar-deep fixed z-40 flex flex-col overflow-hidden",
-        "rounded-2xl border border-border/60 bg-card text-[12px]",
-        "shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset,0_24px_48px_-12px_rgba(0,0,0,0.45),0_8px_16px_-8px_rgba(0,0,0,0.3)]",
-        "ring-1 ring-black/5 dark:ring-white/5",
-        "duration-200 ease-out",
-        "data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=open]:slide-in-from-bottom-2",
-        "data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=closed]:slide-out-to-bottom-2",
-      )}
-    >
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-foreground/[0.03] to-transparent"
-      />
-      {RESIZE_DIRS.map((dir) => (
-        <ResizeHandle key={dir} dir={dir} onPointerDown={startResize(dir)} />
-      ))}
+    <div className="flex h-full min-h-0 flex-col border-l border-border/60 bg-card text-[12px]">
       {sessionId ? (
-        <Body
-          sessionId={sessionId}
-          onClose={closeMini}
-          onExpand={expandToPanel}
-          onHeaderPointerDown={onHeaderPointerDown}
-        />
+        <Body sessionId={sessionId} onClose={closeRightPanel} />
       ) : (
-        <EmptyShell
-          onClose={closeMini}
-          onExpand={expandToPanel}
-          onHeaderPointerDown={onHeaderPointerDown}
-        />
+        <EmptyShell onClose={closeRightPanel} />
       )}
       <PlanDiffReview />
     </div>
   );
 }
 
-const RESIZE_HANDLE_CLASS: Record<ResizeDir, string> = {
-  n: "top-0 left-3 right-3 h-1.5 cursor-ns-resize",
-  s: "bottom-0 left-3 right-3 h-1.5 cursor-ns-resize",
-  w: "top-3 bottom-3 left-0 w-1.5 cursor-ew-resize",
-  e: "top-3 bottom-3 right-0 w-1.5 cursor-ew-resize",
-  nw: "top-0 left-0 size-3 cursor-nwse-resize",
-  ne: "top-0 right-0 size-3 cursor-nesw-resize",
-  sw: "bottom-0 left-0 size-3 cursor-nesw-resize",
-  se: "bottom-0 right-0 size-3 cursor-nwse-resize",
-};
-
-const RESIZE_DIRS: ResizeDir[] = ["n", "s", "w", "e", "nw", "ne", "sw", "se"];
-
-function ResizeHandle({
-  dir,
-  onPointerDown,
-}: {
-  dir: ResizeDir;
-  onPointerDown: (e: React.PointerEvent) => void;
-}) {
-  return (
-    <div
-      data-no-drag
-      onPointerDown={onPointerDown}
-      className={cn("absolute z-50 touch-none select-none", RESIZE_HANDLE_CLASS[dir])}
-    />
-  );
-}
-
 function Body({
   sessionId,
   onClose,
-  onExpand,
-  onHeaderPointerDown,
 }: {
   sessionId: string;
   onClose: () => void;
-  onExpand: () => void;
-  onHeaderPointerDown: (e: React.PointerEvent) => void;
 }) {
   const focusInput = useChatStore((s) => s.focusInput);
   const step = useChatStore((s) => s.agentMeta.step);
@@ -183,9 +112,7 @@ function Body({
         step={step}
         isBusy={isBusy}
         onClose={onClose}
-        onExpand={onExpand}
         messages={helpers.messages}
-        onHeaderPointerDown={onHeaderPointerDown}
       />
 
       <PlanModeStrip />
@@ -208,6 +135,11 @@ function Body({
       </div>
 
       <TodoStrip sessionId={sessionId} />
+
+      {/* AI Composer Input — moved from WorkspaceInputBar */}
+      <div className="shrink-0 border-t border-border/60 bg-card/40 px-3 py-2">
+        <AiComposerInput />
+      </div>
     </>
   );
 }
@@ -236,24 +168,10 @@ function PlanModeStrip() {
   );
 }
 
-function EmptyShell({
-  onClose,
-  onExpand,
-  onHeaderPointerDown,
-}: {
-  onClose: () => void;
-  onExpand: () => void;
-  onHeaderPointerDown: (e: React.PointerEvent) => void;
-}) {
+function EmptyShell({ onClose }: { onClose: () => void }) {
   return (
     <>
-      <Header
-        step={null}
-        isBusy={false}
-        onClose={onClose}
-        onExpand={onExpand}
-        onHeaderPointerDown={onHeaderPointerDown}
-      />
+      <Header step={null} isBusy={false} onClose={onClose} />
       <div className="flex flex-1 items-center justify-center text-[11px] text-muted-foreground">
         Loading sessions…
       </div>
@@ -266,23 +184,17 @@ function Header({
   isBusy,
   onClose,
   messages,
-  onHeaderPointerDown,
 }: {
   step: string | null;
   isBusy: boolean;
   onClose: () => void;
-  onExpand: () => void;
   messages?: UIMessage[];
-  onHeaderPointerDown: (e: React.PointerEvent) => void;
 }) {
   const customAgents = useAgentsStore((s) => s.customAgents);
   void customAgents;
 
   return (
-    <div
-      onPointerDown={onHeaderPointerDown}
-      className="relative flex h-11 shrink-0 cursor-grab items-center justify-between gap-2 border-b border-border/60 px-3 active:cursor-grabbing"
-    >
+    <div className="relative flex h-11 shrink-0 items-center justify-between gap-2 border-b border-border/60 px-3">
       <div className="flex min-w-0 items-center gap-1.5">
         <AgentSwitcher isMiniWindow />
         {messages !== undefined ? (
@@ -505,7 +417,6 @@ function SessionRow({
   return (
     <DropdownMenuItem
       onSelect={(e) => {
-        // Don't dismiss if user clicked the trash icon — handle below.
         const target = e.target as HTMLElement | null;
         if (target?.closest("[data-session-delete]")) {
           e.preventDefault();

@@ -37,6 +37,7 @@ export type ShortcutId =
   | "view.zenMode"
   | "ai.toggle"
   | "ai.askSelection"
+  | "panel.toggleRight"
   | "settings.open"
   | "sidebar.toggle"
   | "editor.undo"
@@ -234,7 +235,7 @@ export const SHORTCUTS: Shortcut[] = [
   },
   {
     id: "ai.toggle",
-    label: "Toggle AI agent",
+    label: "Toggle AI panel",
     group: "AI",
     defaultBindings: [{ [MOD_PROP]: true, key: "i" }],
   },
@@ -243,6 +244,12 @@ export const SHORTCUTS: Shortcut[] = [
     label: "Ask AI about selection",
     group: "AI",
     defaultBindings: [{ [MOD_PROP]: true, key: "j" }],
+  },
+  {
+    id: "panel.toggleRight",
+    label: "Toggle right panel",
+    group: "View",
+    defaultBindings: [{ [MOD_PROP]: true, shift: true, key: "i" }],
   },
   {
     id: "sidebar.toggle",

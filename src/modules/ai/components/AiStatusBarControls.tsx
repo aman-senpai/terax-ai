@@ -30,7 +30,6 @@ import {
   GoogleGeminiIcon,
   Grok02Icon,
   MistralIcon,
-  Message01Icon,
   Mic01Icon,
   PlugIcon,
   ServerStack01Icon,
@@ -97,9 +96,7 @@ export function AiOpenButton({ onOpen }: { onOpen: () => void }) {
 export function AiStatusBarControls() {
   const c = useComposer();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const openMini = useChatStore((s) => s.openMini);
-  const miniOpen = useChatStore((s) => s.mini.open);
-  const closePanel = useChatStore((s) => s.closePanel);
+  const closeRightPanel = useChatStore((s) => s.closeRightPanel);
 
   return (
     <div className="flex items-center gap-0.5">
@@ -157,7 +154,7 @@ export function AiStatusBarControls() {
 
       <span className="mx-1 h-8 w-px bg-border" aria-hidden />
       <Button
-        onClick={closePanel}
+        onClick={closeRightPanel}
         title="Close AI panel"
         size="xs"
         variant="ghost"
@@ -168,13 +165,6 @@ export function AiStatusBarControls() {
           {fmtShortcut(MOD_KEY, "I")}
         </Kbd>
       </Button>
-      <IconBtn
-        title={miniOpen ? "Mini-window open" : "Open conversation"}
-        onClick={openMini}
-        disabled={miniOpen}
-      >
-        <HugeiconsIcon icon={Message01Icon} size={13} strokeWidth={1.75} />
-      </IconBtn>
 
       {c.isBusy ? (
         <Button

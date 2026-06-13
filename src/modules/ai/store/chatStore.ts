@@ -77,10 +77,6 @@ const IDLE_META: AgentMeta = {
   compactionNotice: null,
 };
 
-export type MiniState = {
-  open: boolean;
-};
-
 export type PendingSelection = {
   id: string;
   text: string;
@@ -115,15 +111,10 @@ type StoreState = {
   selectedModelId: string;
   setSelectedModelId: (id: string) => void;
 
-  mini: MiniState;
-  openMini: () => void;
-  closeMini: () => void;
-  toggleMini: () => void;
-
-  panelOpen: boolean;
-  openPanel: () => void;
-  closePanel: () => void;
-  togglePanel: () => void;
+  rightPanelOpen: boolean;
+  openRightPanel: () => void;
+  closeRightPanel: () => void;
+  toggleRightPanel: () => void;
 
   focusSignal: number;
   pendingPrefill: string | null;
@@ -234,21 +225,16 @@ export const useChatStore = create<StoreState>((set, get) => ({
     void pushRecentModel(id);
   },
 
-  mini: { open: false },
-  openMini: () => set({ mini: { open: true } }),
-  closeMini: () => set({ mini: { open: false } }),
-  toggleMini: () => set((s) => ({ mini: { open: !s.mini.open } })),
-
-  panelOpen: false,
-  openPanel: () => set({ panelOpen: true }),
-  closePanel: () => set({ panelOpen: false }),
-  togglePanel: () => set((s) => ({ panelOpen: !s.panelOpen })),
+  rightPanelOpen: false,
+  openRightPanel: () => set({ rightPanelOpen: true }),
+  closeRightPanel: () => set({ rightPanelOpen: false }),
+  toggleRightPanel: () => set((s) => ({ rightPanelOpen: !s.rightPanelOpen })),
 
   focusSignal: 0,
   pendingPrefill: null,
   focusInput: (prefill = null) =>
     set((s) => ({
-      panelOpen: true,
+      rightPanelOpen: true,
       focusSignal: s.focusSignal + 1,
       pendingPrefill: prefill ?? null,
     })),
@@ -264,7 +250,7 @@ export const useChatStore = create<StoreState>((set, get) => ({
     if (!trimmed) return;
     const id = `sel-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     set((s) => ({
-      panelOpen: true,
+      rightPanelOpen: true,
       focusSignal: s.focusSignal + 1,
       pendingSelections: [...s.pendingSelections, { id, text: trimmed, source }],
     }));

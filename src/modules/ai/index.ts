@@ -1,9 +1,9 @@
 export {
   AgentRunBridge,
   AiInputBarConnect,
-  AiMiniWindow,
   SelectionAskAi,
 } from "./components/lazy";
+export { RightPanel } from "./components/RightPanel";
 export { AgentStatusPill } from "./components/AgentStatusPill";
 export { useAiBootstrap } from "./hooks/useAiBootstrap";
 export { useSelectionAskAi } from "./hooks/useSelectionAskAi";

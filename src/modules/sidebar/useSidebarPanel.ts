@@ -70,8 +70,11 @@ export function useSidebarPanel(
   const toggleSidebar = useCallback(() => {
     const p = sidebarRef.current;
     if (!p) return;
-    if (p.getSize().asPercentage <= 0) p.expand();
-    else p.collapse();
+    if (p.getSize().asPercentage <= 0) {
+      p.resize(`${sidebarWidthRef.current}px`);
+    } else {
+      p.collapse();
+    }
   }, []);
 
   const cycleSidebarView = useCallback(
