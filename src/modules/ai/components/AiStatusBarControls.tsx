@@ -96,7 +96,6 @@ export function AiOpenButton({ onOpen }: { onOpen: () => void }) {
 export function AiStatusBarControls() {
   const c = useComposer();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const closeRightPanel = useChatStore((s) => s.closeRightPanel);
 
   return (
     <div className="flex items-center gap-0.5">
@@ -149,20 +148,6 @@ export function AiStatusBarControls() {
           )}
         </IconBtn>
       )}
-
-      <span className="mx-1 h-8 w-px bg-border" aria-hidden />
-      <Button
-        onClick={closeRightPanel}
-        title="Close AI panel"
-        size="xs"
-        variant="ghost"
-        aria-label="Close AI panel"
-        className="text-[11px] text-foreground/85 px-1"
-      >
-        <Kbd className="h-4 gap-px px-2 font-mono text-[11px]">
-          {fmtShortcut(MOD_KEY, "I")}
-        </Kbd>
-      </Button>
 
       {c.isBusy ? (
         <Button
