@@ -49,25 +49,33 @@ export async function requestCompletion(
   });
 
   const isReasoning = /\bgpt-oss\b/i.test(modelId);
-  const providerOptions = isReasoning
-    ? {
-        cerebras: { reasoningEffort: "low" },
-        groq: { reasoningEffort: "low" },
-        openai: { reasoningEffort: "low" },
-      }
-    : undefined;
+  const isDeepSeek = deps.provider === "deepseek";
+
+  const maxOutputTokens = isReasoning
+    ? MAX_OUTPUT_TOKENS_REASONING
+    : isDeepSeek
+      ? MAX_OUTPUT_TOKENS_REASONING
+      : MAX_OUTPUT_TOKENS_DEFAULT;
+
+  const providerOptions: Record<string, Record<string, string | Record<string, string>>> = {};
+  if (isReasoning) {
+    providerOptions.cerebras = { reasoningEffort: "low" };
+    providerOptions.groq = { reasoningEffort: "low" };
+    providerOptions.openai = { reasoningEffort: "low" };
+  }
+  if (isDeepSeek) {
+    providerOptions.deepseek = { thinking: { type: "disabled" } };
+  }
 
   const { text } = await generateText({
     model,
     system: COMPLETION_SYSTEM_PROMPT,
     prompt: buildUserPrompt(req),
-    maxOutputTokens: isReasoning
-      ? MAX_OUTPUT_TOKENS_REASONING
-      : MAX_OUTPUT_TOKENS_DEFAULT,
+    maxOutputTokens,
     maxRetries: 0,
     abortSignal: signal,
     temperature: 0.2,
-    ...(providerOptions ? { providerOptions } : {}),
+    ...(Object.keys(providerOptions).length ? { providerOptions } : {}),
   });
 
   return cleanCompletion(text);

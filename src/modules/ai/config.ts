@@ -658,6 +658,8 @@ export const DEFAULT_AUTOCOMPLETE_MODEL: Partial<Record<ProviderId, string>> = {
   cerebras: "gpt-oss-120b",
   groq: "openai/gpt-oss-20b",
   lmstudio: "qwen2.5-coder-7b-instruct",
+  mlx: "qwen2.5-coder-7b-instruct",
+  ollama: "qwen2.5-coder:7b",
   openai: "gpt-5.4-nano",
   anthropic: "claude-haiku-4-5",
   google: "gemini-2.5-flash",
