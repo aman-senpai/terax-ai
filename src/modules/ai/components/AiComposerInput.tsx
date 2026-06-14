@@ -2,12 +2,21 @@ import { Popover, PopoverAnchor } from "@/components/ui/popover";
 import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 import { usePresence } from "@/lib/usePresence";
-import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useWorkspaceFiles } from "../hooks/useWorkspaceFiles";
 import { useComposer } from "../lib/composer";
+import {
+  editorToText,
+  getCaretOffset,
+  setCaretOffset,
+  textOffsetToDom,
+  insertFileChip,
+  insertSnippetChip,
+} from "../lib/contenteditable";
 import { SLASH_COMMANDS } from "../lib/slashCommands";
 import { useChatStore } from "../store/chatStore";
 import { useSnippetsStore } from "../store/snippetsStore";
+import { ChipsRow } from "./ChipsRow";
 import { FilePickerContent } from "./FilePicker";
 import { SnippetPickerContent, type PickerItem } from "./SnippetPicker";
 
@@ -62,6 +71,12 @@ export function AiComposerInput() {
   const snippets = useSnippetsStore((s) => s.snippets);
   const workspaceRoot = useChatStore((s) => s.live.getWorkspaceRoot());
 
+  const editorRef = useRef<HTMLDivElement | null>(null);
+  // Keep composer's textareaRef pointed at our editor for focus / submit.
+  useLayoutEffect(() => {
+    (c.textareaRef as React.MutableRefObject<HTMLDivElement | null>).current = editorRef.current;
+  }, [editorRef]);
+
   const [trigger, setTrigger] = useState<SnippetTrigger | null>(null);
   const [fileTrigger, setFileTrigger] = useState<FileTrigger | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -78,15 +93,49 @@ export function AiComposerInput() {
     return () => window.clearTimeout(t);
   }, [fileTrigger]);
 
+  // Sync editor DOM when value changes externally (e.g. submit clears it).
+  const syncing = useRef(false);
   useLayoutEffect(() => {
-    autoresize(c.textareaRef.current);
-  }, [c.value, c.textareaRef]);
+    const el = editorRef.current;
+    if (!el) return;
 
-  // Re-run autoresize when the textarea width changes (panel open/collapse,
+    if (c.value === "") {
+      // Always clear DOM when state is empty so the placeholder shows.
+      // Browsers re-insert <br> nodes into focused contenteditables, so we
+      // strip them unconditionally — even when the change came from onInput.
+      while (el.firstChild) el.removeChild(el.firstChild);
+      // Restore cursor so the blinking caret stays visible.
+      if (document.activeElement === el) {
+        requestAnimationFrame(() => {
+          el.focus();
+          const sel = window.getSelection();
+          if (sel) {
+            const r = document.createRange();
+            r.setStart(el, 0);
+            r.collapse(true);
+            sel.removeAllRanges();
+            sel.addRange(r);
+          }
+        });
+      }
+    } else if (!syncing.current) {
+      // Non-empty external change — sync DOM ← state.
+      const domText = editorToText(el);
+      if (domText !== c.value) {
+        while (el.firstChild) el.removeChild(el.firstChild);
+        el.appendChild(document.createTextNode(c.value));
+      }
+    }
+    syncing.current = false;
+
+    autoresize(el);
+  }, [c.value]);
+
+  // Re-run autoresize when the editor width changes (panel open/collapse,
   // window resize) so placeholder-wrapping-based scrollHeight is recalculated.
   const prevWidthRef = useRef(0);
   useLayoutEffect(() => {
-    const el = c.textareaRef.current;
+    const el = editorRef.current;
     if (!el) return;
     const ro = new ResizeObserver(() => {
       const w = el.clientWidth;
@@ -97,21 +146,24 @@ export function AiComposerInput() {
     });
     ro.observe(el);
     return () => ro.disconnect();
-  }, [c.textareaRef]);
+  }, []);
 
   const updateTrigger = () => {
-    const el = c.textareaRef.current;
+    const el = editorRef.current;
     if (!el) {
       setTrigger(null);
       setFileTrigger(null);
       return;
     }
-    const caret = el.selectionStart ?? 0;
-    setTrigger(detectSnippetTrigger(c.value, caret));
-    setFileTrigger(detectFileTrigger(c.value, caret));
+    const caret = getCaretOffset(el);
+    const text = editorToText(el);
+    // Keep c.value in sync (submit reads from it).
+    c.setValue(text);
+    setTrigger(detectSnippetTrigger(text, caret));
+    setFileTrigger(detectFileTrigger(text, caret));
   };
 
-  useEffect(updateTrigger, [c.value, c.textareaRef]);
+  // updateTrigger is called directly from onInput — no effect needed.
 
   const filteredItems = useMemo<PickerItem[]>(() => {
     if (!trigger) return [];
@@ -159,46 +211,73 @@ export function AiComposerInput() {
 
   const onPickItem = (item: PickerItem) => {
     if (!trigger) return;
-    const before = c.value.slice(0, trigger.start);
-    const afterRaw = c.value.slice(trigger.end);
-    let insert = "";
+    const el = editorRef.current;
+    if (!el) return;
+
+    let cursorAfter = trigger.end;
     if (item.kind === "snippet") {
-      const needsSpace = afterRaw.length === 0 || !/^\s/.test(afterRaw);
-      insert = `#${item.snippet.handle}${needsSpace ? " " : ""}`;
       c.addSnippet(item.snippet);
+      cursorAfter = insertSnippetChip(el, trigger.start, trigger.end, item.snippet.handle);
     } else {
       c.addCommand(item.command);
+      // For commands, insert [/name] inline text (chip-able later).
+      const cmdText = `[/${item.command.name}]`;
+      el.focus();
+      const sel = window.getSelection();
+      if (sel?.rangeCount) {
+        const r = sel.getRangeAt(0);
+        // Position the range at trigger.start..trigger.end
+        const startPos = textOffsetToDom(el, trigger.start);
+        const endPos = textOffsetToDom(el, trigger.end);
+        if (startPos && endPos) {
+          r.setStart(startPos.node, startPos.offset);
+          r.setEnd(endPos.node, endPos.offset);
+          r.deleteContents();
+          r.insertNode(document.createTextNode(cmdText + " "));
+          r.collapse(false);
+          sel.removeAllRanges();
+          sel.addRange(r);
+        }
+      }
+      cursorAfter = trigger.start + cmdText.length + 1;
     }
-    const after =
-      item.kind === "command" ? afterRaw.replace(/^\s+/, "") : afterRaw;
-    c.setValue(`${before}${insert}${after}`);
+
+    syncing.current = true;
+    c.setValue(editorToText(el));
     setTrigger(null);
     setActiveIndex(0);
+
     requestAnimationFrame(() => {
-      const el = c.textareaRef.current;
-      if (!el) return;
-      const caret = before.length + insert.length;
-      el.focus();
-      el.setSelectionRange(caret, caret);
+      if (!editorRef.current) return;
+      editorRef.current.focus();
+      setCaretOffset(editorRef.current, cursorAfter);
     });
   };
 
   const onPickFile = async (filePath: string) => {
     if (!fileTrigger || !workspaceRoot) return;
-    const before = c.value.slice(0, fileTrigger.start);
-    const after = c.value.slice(fileTrigger.end);
-    c.setValue(`${before}${after}`);
+    const el = editorRef.current;
+    if (!el) return;
+
+    const fileName = filePath.split("/").pop() || filePath;
+    // Replace @query text with an inline file chip in the DOM.
+    const cursorAfter = insertFileChip(el, fileTrigger.start, fileTrigger.end, fileName);
+    // Update React state from the DOM.
+    syncing.current = true;
+    c.setValue(editorToText(el));
+
     setFileTrigger(null);
     setActiveIndex(0);
+
     const fullPath = workspaceRoot.endsWith("/")
       ? `${workspaceRoot}${filePath}`
       : `${workspaceRoot}/${filePath}`;
     await c.attachFileByPath(fullPath);
+
     requestAnimationFrame(() => {
-      const el = c.textareaRef.current;
-      if (!el) return;
-      el.focus();
-      el.setSelectionRange(before.length, before.length);
+      if (!editorRef.current) return;
+      editorRef.current.focus();
+      setCaretOffset(editorRef.current, cursorAfter);
     });
   };
 
@@ -223,19 +302,80 @@ export function AiComposerInput() {
 
   return (
     <>
+      <ChipsRow
+        files={c.files}
+        onRemoveFile={(id) => {
+          // Extract file name from the path-id (id = "path-/abs/path").
+          const path = id.startsWith("path-") ? id.slice(5) : "";
+          const fileName = path.split("/").pop() || "";
+          if (fileName && editorRef.current) {
+            const chip = editorRef.current.querySelector(
+              `[data-chip="file"][data-name="${CSS.escape(fileName)}"]`,
+            );
+            if (chip) {
+              const prev = chip.previousSibling;
+              const next = chip.nextSibling;
+              chip.remove();
+              if (
+                prev?.nodeType === Node.TEXT_NODE &&
+                next?.nodeType === Node.TEXT_NODE
+              ) {
+                next.textContent = (prev.textContent ?? "") + (next.textContent ?? "");
+                prev.remove();
+              }
+            }
+          }
+          c.removeFile(id);
+          if (editorRef.current) {
+            syncing.current = true;
+            c.setValue(editorToText(editorRef.current));
+          }
+        }}
+        snippets={c.pickedSnippets}
+        onRemoveSnippet={(id) => {
+          const snip = c.pickedSnippets.find((s) => s.id === id);
+          c.removeSnippet(id);
+          if (!snip || !editorRef.current) return;
+          // Remove inline chip from the DOM.
+          const chip = editorRef.current.querySelector(
+            `[data-chip="snippet"][data-name="${CSS.escape(snip.handle)}"]`,
+          );
+          if (chip) {
+            const prev = chip.previousSibling;
+            const next = chip.nextSibling;
+            chip.remove();
+            // Merge adjacent text nodes that might have surrounded the chip.
+            if (
+              prev?.nodeType === Node.TEXT_NODE &&
+              next?.nodeType === Node.TEXT_NODE
+            ) {
+              next.textContent = (prev.textContent ?? "") + (next.textContent ?? "");
+              prev.remove();
+            }
+          }
+          syncing.current = true;
+          c.setValue(editorToText(editorRef.current));
+        }}
+        commands={c.pickedCommands}
+        onRemoveCommand={(name) => c.removeCommand(name)}
+      />
+
       <Popover open={pickerOpen}>
         <PopoverAnchor asChild>
-          <div className="flex items-start gap-2">
-            <textarea
-              ref={(el) => {
-                (c.textareaRef as React.MutableRefObject<HTMLTextAreaElement | null>).current = el;
-                if (el) autoresize(el);
+          <div className="relative flex items-start gap-2">
+            <div
+              ref={editorRef}
+              contentEditable
+              suppressContentEditableWarning
+              onInput={() => {
+                const el = editorRef.current;
+                if (!el) return;
+                syncing.current = true;
+                c.setValue(editorToText(el));
+                updateTrigger();
               }}
-              value={c.value}
-              onChange={(e) => c.setValue(e.target.value)}
-              onKeyUp={updateTrigger}
               onClick={updateTrigger}
-              onSelect={updateTrigger}
+              onKeyUp={updateTrigger}
               onKeyDown={(e) => {
                 if (pickerOpen) {
                   const items = fileTrigger ? filteredFiles : filteredItems;
@@ -261,9 +401,27 @@ export function AiComposerInput() {
                   if (e.key === "Escape") {
                     e.preventDefault();
                     if (fileTrigger) {
-                      const before = c.value.slice(0, fileTrigger.start);
-                      const after = c.value.slice(fileTrigger.end);
-                      c.setValue(`${before}${after}`);
+                      const el = editorRef.current;
+                      if (el) {
+                        const r = document.createRange();
+                        const s = textOffsetToDom(el, fileTrigger.start);
+                        const en = textOffsetToDom(el, fileTrigger.end);
+                        if (s && en) {
+                          r.setStart(s.node, s.offset);
+                          r.setEnd(en.node, en.offset);
+                          r.deleteContents();
+                          // Insert a space if both sides are adjacent to non-space
+                          r.insertNode(document.createTextNode(" "));
+                          r.collapse(false);
+                          const sel = window.getSelection();
+                          if (sel) {
+                            sel.removeAllRanges();
+                            sel.addRange(r);
+                          }
+                        }
+                      }
+                      syncing.current = true;
+                      c.setValue(editorToText(el ?? document.createElement("div")));
                       setFileTrigger(null);
                     } else {
                       setTrigger(null);
@@ -276,13 +434,20 @@ export function AiComposerInput() {
                   c.submit();
                 }
               }}
-              placeholder="Ask Terax anything   -   # for snippets and commands, @ for files"
-              rows={1}
               className={cn(
-                "min-h-[5rem] max-h-40 flex-1 resize-none bg-transparent text-[13px] leading-relaxed outline-none",
-                "placeholder:text-muted-foreground/60",
+                "min-h-[5rem] max-h-40 flex-1 bg-transparent text-[13px] leading-relaxed outline-none",
+                "whitespace-pre-wrap break-words",
               )}
             />
+            {/* State-driven placeholder — avoids browser :empty / <br> quirks */}
+            {c.value === "" && !pickerOpen && (
+              <span
+                className="pointer-events-none absolute left-0 top-0 text-[13px] leading-relaxed text-muted-foreground/60 select-none"
+                aria-hidden
+              >
+                Ask Terax anything{"  "}—{"  "}# for snippets and commands, @ for files
+              </span>
+            )}
           </div>
         </PopoverAnchor>
         {fileTrigger ? (
@@ -326,7 +491,7 @@ export function AiComposerInput() {
 const AUTORESIZE_MIN = 80;
 const AUTORESIZE_MAX = 160;
 
-function autoresize(el: HTMLTextAreaElement | null) {
+function autoresize(el: HTMLElement | null) {
   if (!el) return;
   el.style.height = "auto";
   el.style.height = `${Math.max(AUTORESIZE_MIN, Math.min(el.scrollHeight, AUTORESIZE_MAX))}px`;
