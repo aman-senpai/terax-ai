@@ -168,15 +168,7 @@ export function Header({
       <SearchInline ref={searchRef} target={searchTarget} compact={compact} />
 
       {/* Panel toggles — right side */}
-      <Button
-        onClick={onToggleRightPanel}
-        title="Toggle AI panel"
-        variant="ghost"
-        size="icon-sm"
-        className="shrink-0 rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
-      >
-        <HugeiconsIcon icon={AiContentGenerator02Icon} size={18} strokeWidth={1.75} />
-      </Button>
+      {settingsButton}
 
       {IS_MAC && (
         <>
@@ -184,11 +176,29 @@ export function Header({
             onActivate={onActivateAgent}
             onActivateLocal={onActivateLocalAgent}
           />
-          {settingsButton}
+          <Button
+            onClick={onToggleRightPanel}
+            title="Toggle AI panel"
+            variant="ghost"
+            size="icon-sm"
+            className="shrink-0 rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+          >
+            <HugeiconsIcon icon={AiContentGenerator02Icon} size={18} strokeWidth={1.75} />
+          </Button>
         </>
       )}
 
-      {!IS_MAC && settingsButton}
+      {!IS_MAC && (
+        <Button
+          onClick={onToggleRightPanel}
+          title="Toggle AI panel"
+          variant="ghost"
+          size="icon-sm"
+          className="shrink-0 rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+        >
+          <HugeiconsIcon icon={AiContentGenerator02Icon} size={18} strokeWidth={1.75} />
+        </Button>
+      )}
 
       {USE_CUSTOM_WINDOW_CONTROLS && (
         <>

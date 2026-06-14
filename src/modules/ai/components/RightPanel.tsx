@@ -18,7 +18,7 @@ import {
   TerminalIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { estimateCost, getModel, getModelContextLimit, type ModelId } from "../config";
 import type { SessionMeta } from "../lib/sessions";
 import { useChatStore } from "../store/chatStore";
@@ -90,8 +90,8 @@ function Body({ sessionId }: { sessionId: string }) {
   const newSession = useChatStore((s) => s.newSession);
   const switchSession = useChatStore((s) => s.switchSession);
   const deleteSession = useChatStore((s) => s.deleteSession);
-
-  const [historyOpen, setHistoryOpen] = useState(false);
+  const historyOpen = useChatStore((s) => s.historyOpen);
+  const toggleHistory = useChatStore((s) => s.toggleHistory);
 
   const chat = useMemo(() => getOrCreateChat(sessionId), [sessionId]);
   const helpers = useChat<UIMessage>({ chat });
@@ -107,11 +107,9 @@ function Body({ sessionId }: { sessionId: string }) {
         step={step}
         isBusy={isBusy}
         title={activeTitle}
-        historyOpen={historyOpen}
-        onToggleHistory={() => setHistoryOpen((v) => !v)}
         onNewSession={() => {
           newSession();
-          setHistoryOpen(false);
+          toggleHistory();
         }}
       />
 
@@ -121,7 +119,7 @@ function Body({ sessionId }: { sessionId: string }) {
           activeId={activeId}
           onSelect={(id) => {
             switchSession(id);
-            setHistoryOpen(false);
+            toggleHistory();
           }}
           onDelete={deleteSession}
         />
@@ -194,8 +192,6 @@ function EmptyShell() {
         step={null}
         isBusy={false}
         title="Loading…"
-        historyOpen={false}
-        onToggleHistory={() => {}}
         onNewSession={() => {}}
       />
       <div className="flex flex-1 items-center justify-center text-[11px] text-muted-foreground">
@@ -209,17 +205,16 @@ function Header({
   step,
   isBusy,
   title,
-  historyOpen,
-  onToggleHistory,
   onNewSession,
 }: {
   step: string | null;
   isBusy: boolean;
   title: string;
-  historyOpen: boolean;
-  onToggleHistory: () => void;
   onNewSession: () => void;
 }) {
+  const historyOpen = useChatStore((s) => s.historyOpen);
+  const toggleHistory = useChatStore((s) => s.toggleHistory);
+
   return (
     <div className="relative flex h-8 shrink-0 items-center gap-2 border-b border-border/60 px-2">
       <div className="flex min-w-0 items-center gap-1.5">
@@ -238,7 +233,7 @@ function Header({
       <div className="flex min-w-0 flex-1 items-center justify-end gap-0.5">
         <button
           type="button"
-          onClick={onToggleHistory}
+          onClick={toggleHistory}
           className={cn(
             "flex shrink-0 items-center justify-center size-6 rounded-md",
             "text-muted-foreground transition-colors",

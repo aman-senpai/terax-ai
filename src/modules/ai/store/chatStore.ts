@@ -116,6 +116,9 @@ type StoreState = {
   closeRightPanel: () => void;
   toggleRightPanel: () => void;
 
+  historyOpen: boolean;
+  toggleHistory: () => void;
+
   focusSignal: number;
   pendingPrefill: string | null;
   focusInput: (prefill?: string | null) => void;
@@ -229,6 +232,9 @@ export const useChatStore = create<StoreState>((set, get) => ({
   openRightPanel: () => set({ rightPanelOpen: true }),
   closeRightPanel: () => set({ rightPanelOpen: false }),
   toggleRightPanel: () => set((s) => ({ rightPanelOpen: !s.rightPanelOpen })),
+
+  historyOpen: false,
+  toggleHistory: () => set((s) => ({ historyOpen: !s.historyOpen })),
 
   focusSignal: 0,
   pendingPrefill: null,
