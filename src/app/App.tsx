@@ -1030,7 +1030,6 @@ export default function App() {
               onPin={pinTab}
               onRename={handleRenameTab}
               onToggleSidebar={toggleSidebar}
-              onToggleRightPanel={toggleRightPanel}
               onOpenCommandPalette={() => openCommandPalette("commands")}
               onActivateAgent={onActivateAgent}
               onActivateLocalAgent={onActivateLocalAgent}
@@ -1154,7 +1153,6 @@ export default function App() {
               home={home}
               onCd={sendCd}
               onWorkspaceChange={switchWorkspace}
-              hasComposer={hasComposer}
               privateActive={
                 activeTab?.kind === "terminal" && activeTab.private === true
               }

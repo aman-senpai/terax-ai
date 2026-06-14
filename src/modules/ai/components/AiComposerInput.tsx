@@ -19,6 +19,13 @@ import { useSnippetsStore } from "../store/snippetsStore";
 import { ChipsRow } from "./ChipsRow";
 import { FilePickerContent } from "./FilePicker";
 import { SnippetPickerContent, type PickerItem } from "./SnippetPicker";
+import { Button } from "@/components/ui/button";
+import {
+  ArrowRight01Icon,
+  Mic01Icon,
+  StopCircleIcon,
+} from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 
 type SnippetTrigger = {
   start: number;
@@ -70,7 +77,6 @@ export function AiComposerInput() {
   const c = useComposer();
   const snippets = useSnippetsStore((s) => s.snippets);
   const workspaceRoot = useChatStore((s) => s.live.getWorkspaceRoot());
-
   const editorRef = useRef<HTMLDivElement | null>(null);
   // Keep composer's textareaRef pointed at our editor for focus / submit.
   useLayoutEffect(() => {
@@ -362,7 +368,7 @@ export function AiComposerInput() {
 
       <Popover open={pickerOpen}>
         <PopoverAnchor asChild>
-          <div className="relative flex items-start gap-2">
+          <div className="relative flex flex-1">
             <div
               ref={editorRef}
               contentEditable
@@ -435,8 +441,8 @@ export function AiComposerInput() {
                 }
               }}
               className={cn(
-                "min-h-[5rem] max-h-40 flex-1 bg-transparent text-[13px] leading-relaxed outline-none",
-                "whitespace-pre-wrap break-words",
+                "min-h-[5rem] max-h-40 w-full bg-transparent text-[13px] leading-relaxed outline-none",
+                "whitespace-pre-wrap break-words overflow-y-auto pr-8",
               )}
             />
             {/* State-driven placeholder — avoids browser :empty / <br> quirks */}
@@ -447,6 +453,68 @@ export function AiComposerInput() {
               >
                 Ask Terax anything{"  "}—{"  "}# for snippets and commands, @ for files
               </span>
+            )}
+
+            {/* Top-right: send / stop */}
+            {c.isBusy ? (
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                onClick={c.stop}
+                className="absolute right-1 top-1 size-6"
+                aria-label="Stop"
+                title="Stop"
+              >
+                <HugeiconsIcon icon={StopCircleIcon} size={13} strokeWidth={1.75} />
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                size="icon"
+                onClick={c.submit}
+                disabled={!c.canSend}
+                className="absolute right-1 top-1 h-5.5 w-7.5 rounded-md"
+                aria-label="Send"
+                title="Send (Enter)"
+              >
+                <HugeiconsIcon icon={ArrowRight01Icon} size={13} strokeWidth={1.75} />
+              </Button>
+            )}
+
+            {/* Bottom-right: mic */}
+            {c.voice.supported && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                title={
+                  !c.voice.hasKey
+                    ? "Voice needs an OpenAI key"
+                    : c.voice.recording
+                      ? "Stop & transcribe"
+                      : c.voice.transcribing
+                        ? "Transcribing…"
+                        : "Voice input"
+                }
+                onClick={() =>
+                  c.voice.recording ? c.voice.stop() : void c.voice.start()
+                }
+                disabled={c.isBusy || c.voice.transcribing || !c.voice.hasKey}
+                className={cn(
+                  "absolute right-1 bottom-1 size-6 rounded-md text-muted-foreground hover:text-foreground",
+                  c.voice.recording &&
+                    "bg-destructive/10 text-destructive hover:bg-destructive/15",
+                )}
+              >
+                {c.voice.recording ? (
+                  <span className="size-2 animate-pulse rounded-full bg-destructive" />
+                ) : c.voice.transcribing ? (
+                  <Spinner className="size-3" />
+                ) : (
+                  <HugeiconsIcon icon={Mic01Icon} size={13} strokeWidth={1.75} />
+                )}
+              </Button>
             )}
           </div>
         </PopoverAnchor>

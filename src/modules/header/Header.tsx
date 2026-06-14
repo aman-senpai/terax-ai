@@ -5,7 +5,6 @@ import { NotificationBell } from "@/modules/agents";
 import type { Tab } from "@/modules/tabs";
 import { TabBar } from "@/modules/tabs";
 import {
-  AiContentGenerator02Icon,
   CommandIcon,
   Settings01Icon,
   SidebarLeftIcon,
@@ -40,7 +39,6 @@ type Props = {
   /** Set a terminal tab's custom label; empty string resets to default. */
   onRename: (id: number, title: string) => void;
   onToggleSidebar: () => void;
-  onToggleRightPanel: () => void;
   onOpenCommandPalette: () => void;
   onActivateAgent: (tabId: number, leafId: number) => void;
   onActivateLocalAgent: () => void;
@@ -66,7 +64,6 @@ export function Header({
   onPin,
   onRename,
   onToggleSidebar,
-  onToggleRightPanel,
   onOpenCommandPalette,
   onActivateAgent,
   onActivateLocalAgent,
@@ -171,33 +168,10 @@ export function Header({
       {settingsButton}
 
       {IS_MAC && (
-        <>
-          <NotificationBell
-            onActivate={onActivateAgent}
-            onActivateLocal={onActivateLocalAgent}
-          />
-          <Button
-            onClick={onToggleRightPanel}
-            title="Toggle AI panel"
-            variant="ghost"
-            size="icon-sm"
-            className="shrink-0 rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
-          >
-            <HugeiconsIcon icon={AiContentGenerator02Icon} size={18} strokeWidth={1.75} />
-          </Button>
-        </>
-      )}
-
-      {!IS_MAC && (
-        <Button
-          onClick={onToggleRightPanel}
-          title="Toggle AI panel"
-          variant="ghost"
-          size="icon-sm"
-          className="shrink-0 rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
-        >
-          <HugeiconsIcon icon={AiContentGenerator02Icon} size={18} strokeWidth={1.75} />
-        </Button>
+        <NotificationBell
+          onActivate={onActivateAgent}
+          onActivateLocal={onActivateLocalAgent}
+        />
       )}
 
       {USE_CUSTOM_WINDOW_CONTROLS && (

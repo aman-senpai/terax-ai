@@ -1,9 +1,6 @@
 import { useChatStore } from "@/modules/ai";
 import { AgentStatusPill } from "@/modules/ai/components/AgentStatusPill";
-import {
-  AiOpenButton,
-  AiStatusBarControls,
-} from "@/modules/ai/components/AiStatusBarControls";
+import { AiOpenButton } from "@/modules/ai/components/AiStatusBarControls";
 import {
   Tooltip,
   TooltipContent,
@@ -21,8 +18,6 @@ type Props = {
   home: string | null;
   onCd: (path: string) => void;
   onWorkspaceChange: (env: WorkspaceEnv) => void;
-  /** Only rendered when the AI panel is open and a key is loaded. */
-  hasComposer: boolean;
   privateActive: boolean;
 };
 
@@ -32,10 +27,10 @@ export function StatusBar({
   home,
   onCd,
   onWorkspaceChange,
-  hasComposer,
   privateActive,
 }: Props) {
   const rightPanelOpen = useChatStore((s) => s.rightPanelOpen);
+  const toggleRightPanel = useChatStore((s) => s.toggleRightPanel);
   const openRightPanel = useChatStore((s) => s.openRightPanel);
 
   return (
@@ -60,11 +55,7 @@ export function StatusBar({
       </div>
       <div className="flex shrink-0 items-center gap-1.5">
         <AgentStatusPill onClick={openRightPanel} />
-        {rightPanelOpen && hasComposer ? (
-          <AiStatusBarControls />
-        ) : (
-          <AiOpenButton onOpen={openRightPanel} />
-        )}
+        <AiOpenButton onClick={toggleRightPanel} active={rightPanelOpen} />
       </div>
     </footer>
   );

@@ -6,6 +6,7 @@ import {
   ContextContentHeader,
   ContextTrigger,
 } from "@/components/ai-elements/context";
+import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 import { useChat, type UIMessage } from "@ai-sdk/react";
@@ -18,8 +19,9 @@ import {
   TerminalIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { estimateCost, getModel, getModelContextLimit, type ModelId } from "../config";
+import { ACCEPTED_FILES, useComposer } from "../lib/composer";
 import type { SessionMeta } from "../lib/sessions";
 import { useChatStore } from "../store/chatStore";
 import { getOrCreateChat } from "../store/chatRuntime";
@@ -84,6 +86,8 @@ export function RightPanel() {
 }
 
 function Body({ sessionId }: { sessionId: string }) {
+  const c = useComposer();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const focusInput = useChatStore((s) => s.focusInput);
   const step = useChatStore((s) => s.agentMeta.step);
   const sessions = useChatStore((s) => s.sessions);
@@ -149,9 +153,31 @@ function Body({ sessionId }: { sessionId: string }) {
 
       {/* AI Composer Input — moved from WorkspaceInputBar */}
       <div className="shrink-0 border-t border-border/60 bg-card/40 px-3 py-2">
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          accept={ACCEPTED_FILES}
+          className="hidden"
+          onChange={(e) => {
+            void c.addFiles(e.target.files);
+            e.target.value = "";
+          }}
+        />
         <AiComposerInput />
         <div className="mt-1.5 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              title="Attach file or image"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={c.isBusy}
+              className="size-6 rounded-md text-muted-foreground hover:text-foreground"
+            >
+              <HugeiconsIcon icon={Add01Icon} size={13} strokeWidth={2} />
+            </Button>
             <ContextIndicator messages={helpers.messages} />
             <AgentSwitcher />
           </div>

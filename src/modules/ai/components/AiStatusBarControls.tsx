@@ -6,16 +6,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Kbd } from "@/components/ui/kbd";
-import { Spinner } from "@/components/ui/spinner";
 import { fmtShortcut, MOD_KEY } from "@/lib/platform";
 import { cn } from "@/lib/utils";
 import { openSettingsWindow } from "@/modules/settings/openSettingsWindow";
 
 import {
-  Add01Icon,
   AppleIcon,
   ArrowDown01Icon,
-  ArrowUpIcon,
   ChatGptIcon,
   ClaudeIcon,
   ComputerIcon,
@@ -27,13 +24,12 @@ import {
   GoogleGeminiIcon,
   Grok02Icon,
   MistralIcon,
-  Mic01Icon,
   PlugIcon,
   ServerStack01Icon,
   Search01Icon,
   Settings01Icon,
+  SparklesIcon,
   StarIcon,
-  StopCircleIcon,
   Tick01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -50,7 +46,6 @@ import {
   type ModelInfo,
   type ProviderId,
 } from "../config";
-import { ACCEPTED_FILES, useComposer } from "../lib/composer";
 import { toggleFavoriteModel } from "../lib/modelPrefs";
 import { useChatStore } from "../store/chatStore";
 import { usePreferencesStore } from "@/modules/settings/preferences";
@@ -71,107 +66,34 @@ const PROVIDER_ICON = {
   ollama: ServerStack01Icon,
 } as const satisfies Record<ProviderId, typeof ChatGptIcon>;
 
-export function AiOpenButton({ onOpen }: { onOpen: () => void }) {
+export function AiOpenButton({
+  onClick,
+  active,
+}: {
+  onClick: () => void;
+  active?: boolean;
+}) {
   return (
     <button
       type="button"
-      onClick={onOpen}
+      onClick={onClick}
       className={cn(
-        "flex h-6 items-center gap-1.5 rounded-md border border-border/60 bg-card px-2 text-xs",
-        "text-muted-foreground transition-colors hover:border-border hover:bg-accent hover:text-foreground",
+        "flex h-6 items-center gap-1 rounded-md border px-1.5 text-xs transition-colors",
+        active
+          ? "border-border bg-accent text-foreground"
+          : "border-border/60 bg-card text-muted-foreground hover:border-border hover:bg-accent hover:text-foreground",
         "animate-in slide-in-from-top-2 duration-200 ease-out",
       )}
-      title="Open AI agent"
+      title="Toggle AI agent"
     >
-      <span>Open AI agent</span>
+      <HugeiconsIcon icon={SparklesIcon} size={12} strokeWidth={1.75} />
       <Kbd className="h-4 min-w-4 px-1">{fmtShortcut(MOD_KEY, "I")}</Kbd>
     </button>
   );
 }
 
 export function AiStatusBarControls() {
-  const c = useComposer();
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  return (
-    <div className="flex items-center gap-0.5">
-      <input
-        ref={fileInputRef}
-        type="file"
-        multiple
-        accept={ACCEPTED_FILES}
-        className="hidden"
-        onChange={(e) => {
-          void c.addFiles(e.target.files);
-          e.target.value = "";
-        }}
-      />
-
-      <IconBtn
-        title="Attach file or image"
-        onClick={() => fileInputRef.current?.click()}
-        disabled={c.isBusy}
-      >
-        <HugeiconsIcon icon={Add01Icon} size={13} strokeWidth={2} />
-      </IconBtn>
-
-      {c.voice.supported && (
-        <IconBtn
-          title={
-            !c.voice.hasKey
-              ? "Voice needs an OpenAI key"
-              : c.voice.recording
-                ? "Stop & transcribe"
-                : c.voice.transcribing
-                  ? "Transcribing…"
-                  : "Voice input"
-          }
-          onClick={() =>
-            c.voice.recording ? c.voice.stop() : void c.voice.start()
-          }
-          disabled={c.isBusy || c.voice.transcribing || !c.voice.hasKey}
-          className={cn(
-            c.voice.recording &&
-            "bg-destructive/10 text-destructive hover:bg-destructive/15",
-          )}
-        >
-          {c.voice.recording ? (
-            <span className="size-2 animate-pulse rounded-full bg-destructive" />
-          ) : c.voice.transcribing ? (
-            <Spinner className="size-3" />
-          ) : (
-            <HugeiconsIcon icon={Mic01Icon} size={13} strokeWidth={1.75} />
-          )}
-        </IconBtn>
-      )}
-
-      {c.isBusy ? (
-        <Button
-          type="button"
-          size="icon"
-          variant="ghost"
-          onClick={c.stop}
-          className="size-6"
-          aria-label="Stop"
-          title="Stop"
-        >
-          <HugeiconsIcon icon={StopCircleIcon} size={13} strokeWidth={1.75} />
-        </Button>
-      ) : (
-        <Button
-          type="button"
-          size="icon"
-          onClick={c.submit}
-          disabled={!c.canSend}
-          className="h-5.5 w-7.5 ml-1"
-          aria-label="Send"
-          title="Send (Enter)"
-        >
-          <HugeiconsIcon icon={ArrowUpIcon} size={13} strokeWidth={1.75} />
-        </Button>
-      )}
-    </div>
-  );
+  return null;
 }
 
 export function ModelDropdown() {
@@ -456,33 +378,3 @@ function ModelRow({
   );
 }
 
-function IconBtn({
-  title,
-  onClick,
-  disabled,
-  className,
-  children,
-}: {
-  title: string;
-  onClick: () => void;
-  disabled?: boolean;
-  className?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <Button
-      type="button"
-      variant="ghost"
-      size="icon"
-      title={title}
-      onClick={onClick}
-      disabled={disabled}
-      className={cn(
-        "size-6 rounded-md text-muted-foreground hover:text-foreground",
-        className,
-      )}
-    >
-      {children}
-    </Button>
-  );
-}
