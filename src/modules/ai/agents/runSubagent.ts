@@ -1,7 +1,7 @@
 import { streamText, stepCountIs } from "ai";
-import { getModel, selectSystemPrompt, type ModelId } from "../config";
+import { resolveModel, selectSystemPrompt } from "../config";
 import { buildConfiguredLanguageModel } from "../lib/agent";
-import { buildThinkingProviderOptions } from "../lib/thinking";
+import { buildThinkingProviderOptions, type ThinkingLevel } from "../lib/thinking";
 import type { ProviderKeys } from "../lib/keyring";
 import type { ToolContext } from "../tools/context";
 import { buildFsTools } from "../tools/fs";
@@ -39,6 +39,7 @@ type Args = {
   description?: string;
   keys: ProviderKeys;
   modelId: string;
+  thinkingLevel: ThinkingLevel;
   toolContext: ToolContext;
 };
 
@@ -235,6 +236,7 @@ async function runSubagent({
   prompt,
   keys,
   modelId,
+  thinkingLevel,
   toolContext,
 }: Args): Promise<Omit<RunResult, "description">> {
   // ── Model (same as main agent) ──────────────────────────────────────
@@ -251,14 +253,13 @@ async function runSubagent({
     openrouterModelId: prefs.openrouterModelId,
   });
 
-  const info = getModel(modelId as ModelId);
+  const info = resolveModel(modelId, prefs.customEndpoints);
   const provider = info.provider;
 
   // ── System prompt (same as main agent) ──────────────────────────────
   const systemPrompt = selectSystemPrompt(modelId);
 
-  // ── Thinking config (same as main agent) ────────────────────────────
-  const thinkingLevel = useChatStore.getState().thinkingLevel;
+  // ── Thinking config ─────────────────────────────────────────────────
   const providerOptions = buildThinkingProviderOptions(
     provider,
     thinkingLevel,

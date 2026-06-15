@@ -3,6 +3,8 @@ import { z } from "zod";
 import { spawnSubagent, waitForSubagents } from "../agents/runSubagent";
 import { registerBatch } from "../agents/subagentProgress";
 import { useChatStore } from "../store/chatStore";
+import { usePreferencesStore } from "@/modules/settings/preferences";
+import { MODELS, providerNeedsKey } from "../config";
 import type { ToolContext } from "./context";
 
 export function buildSubagentTools(ctx: ToolContext) {
@@ -34,11 +36,26 @@ Auto-executes (no approval).`,
           .describe("One or more tasks to run in parallel."),
       }),
       execute: async ({ tasks }) => {
-        const { apiKeys, selectedModelId } = useChatStore.getState();
+        const { apiKeys } = useChatStore.getState();
 
         if (tasks.length === 0) {
           return { results: [] };
         }
+
+        const prefs = usePreferencesStore.getState();
+        const provider = prefs.subagentProvider;
+        const modelId = prefs.subagentModelId;
+        const thinkingLevel = prefs.subagentThinkingLevel;
+
+        const isLocal = !providerNeedsKey(provider);
+        const fallback = MODELS[0];
+        const currentModel = isLocal
+          ? (MODELS.find((m) => m.provider === provider) ?? fallback)
+          : (MODELS.find((m) => m.provider === provider && m.id === modelId) ??
+             MODELS.find((m) => m.id === modelId) ??
+             fallback);
+
+        const resolvedModelId = currentModel.id;
 
         // Spawn all subagents in parallel — each returns immediately with a jobId.
         const spawned: Array<{ jobId: string; desc: string }> = [];
@@ -47,7 +64,8 @@ Auto-executes (no approval).`,
             prompt: t.prompt,
             description: t.description,
             keys: apiKeys,
-            modelId: selectedModelId,
+            modelId: resolvedModelId,
+            thinkingLevel,
             toolContext: ctx,
           });
           spawned.push({

@@ -10,6 +10,7 @@ import {
   type AutocompleteProviderId,
   type CustomEndpoint,
   type ModelId,
+  type ProviderId,
 } from "@/modules/ai/config";
 import {
   DEFAULT_THINKING_LEVEL,
@@ -94,6 +95,9 @@ export type Preferences = {
   autocompleteProvider: AutocompleteProviderId;
   autocompleteModelId: string;
   autocompleteThinkingLevel: ThinkingLevel;
+  subagentProvider: ProviderId;
+  subagentModelId: string;
+  subagentThinkingLevel: ThinkingLevel;
   lmstudioBaseURL: string;
   lmstudioModelId: string;
   mlxBaseURL: string;
@@ -142,6 +146,9 @@ const KEY_AUTOCOMPLETE_ENABLED = "autocompleteEnabled";
 const KEY_AUTOCOMPLETE_PROVIDER = "autocompleteProvider";
 const KEY_AUTOCOMPLETE_MODEL = "autocompleteModelId";
 const KEY_AUTOCOMPLETE_THINKING_LEVEL = "autocompleteThinkingLevel";
+const KEY_SUBAGENT_PROVIDER = "subagentProvider";
+const KEY_SUBAGENT_MODEL = "subagentModelId";
+const KEY_SUBAGENT_THINKING_LEVEL = "subagentThinkingLevel";
 const KEY_LMSTUDIO_BASE_URL = "lmstudioBaseURL";
 const KEY_LMSTUDIO_MODEL_ID = "lmstudioModelId";
 const KEY_MLX_BASE_URL = "mlxBaseURL";
@@ -234,6 +241,9 @@ export const DEFAULT_PREFERENCES: Preferences = {
   autocompleteProvider: "cerebras",
   autocompleteModelId: DEFAULT_AUTOCOMPLETE_MODEL.cerebras ?? "",
   autocompleteThinkingLevel: "low",
+  subagentProvider: "openai",
+  subagentModelId: DEFAULT_MODEL_ID,
+  subagentThinkingLevel: "low",
   lmstudioBaseURL: LMSTUDIO_DEFAULT_BASE_URL,
   lmstudioModelId: "",
   mlxBaseURL: MLX_DEFAULT_BASE_URL,
@@ -329,6 +339,15 @@ export async function loadPreferences(): Promise<Preferences> {
     autocompleteThinkingLevel:
       get<ThinkingLevel>(KEY_AUTOCOMPLETE_THINKING_LEVEL) ??
       DEFAULT_PREFERENCES.autocompleteThinkingLevel,
+    subagentProvider:
+      get<ProviderId>(KEY_SUBAGENT_PROVIDER) ??
+      DEFAULT_PREFERENCES.subagentProvider,
+    subagentModelId:
+      get<string>(KEY_SUBAGENT_MODEL) ??
+      DEFAULT_PREFERENCES.subagentModelId,
+    subagentThinkingLevel:
+      get<ThinkingLevel>(KEY_SUBAGENT_THINKING_LEVEL) ??
+      DEFAULT_PREFERENCES.subagentThinkingLevel,
     lmstudioBaseURL:
       get<string>(KEY_LMSTUDIO_BASE_URL) ?? DEFAULT_PREFERENCES.lmstudioBaseURL,
     lmstudioModelId:
@@ -500,6 +519,22 @@ export async function setAutocompleteThinkingLevel(
   value: ThinkingLevel,
 ): Promise<void> {
   await writePref(KEY_AUTOCOMPLETE_THINKING_LEVEL, value);
+}
+
+export async function setSubagentProvider(
+  value: ProviderId,
+): Promise<void> {
+  await writePref(KEY_SUBAGENT_PROVIDER, value);
+}
+
+export async function setSubagentModelId(value: string): Promise<void> {
+  await writePref(KEY_SUBAGENT_MODEL, value);
+}
+
+export async function setSubagentThinkingLevel(
+  value: ThinkingLevel,
+): Promise<void> {
+  await writePref(KEY_SUBAGENT_THINKING_LEVEL, value);
 }
 
 export async function setLmstudioBaseURL(value: string): Promise<void> {
@@ -676,6 +711,9 @@ export async function onPreferencesChange(
     [KEY_AUTOCOMPLETE_PROVIDER]: "autocompleteProvider",
     [KEY_AUTOCOMPLETE_MODEL]: "autocompleteModelId",
     [KEY_AUTOCOMPLETE_THINKING_LEVEL]: "autocompleteThinkingLevel",
+    [KEY_SUBAGENT_PROVIDER]: "subagentProvider",
+    [KEY_SUBAGENT_MODEL]: "subagentModelId",
+    [KEY_SUBAGENT_THINKING_LEVEL]: "subagentThinkingLevel",
     [KEY_LMSTUDIO_BASE_URL]: "lmstudioBaseURL",
     [KEY_LMSTUDIO_MODEL_ID]: "lmstudioModelId",
     [KEY_MLX_BASE_URL]: "mlxBaseURL",

@@ -45,6 +45,9 @@ import {
   setAutocompleteModelId,
   setAutocompleteProvider,
   setAutocompleteThinkingLevel,
+  setSubagentProvider,
+  setSubagentModelId,
+  setSubagentThinkingLevel,
   setCustomEndpoints,
   setDefaultModel,
   setDefaultThinkingLevel,
@@ -534,6 +537,7 @@ function DefaultsBlock({
           />
         </FieldRow>
         <AutocompleteRow keys={keys} configuredIds={configuredIds} />
+        <SubagentRow keys={keys} configuredIds={configuredIds} />
       </div>
     </div>
   );
@@ -854,6 +858,187 @@ function AutocompleteRow({
         </div>
       </FieldRow>
       {enabled && !hasKey ? (
+        <p className="pl-19 text-[10.5px] text-muted-foreground">
+          {getProvider(provider).label} isn't connected — add it below.
+        </p>
+      ) : null}
+    </>
+  );
+}
+
+function SubagentRow({
+  keys,
+  configuredIds,
+}: {
+  keys: KeysMap;
+  configuredIds: Set<ProviderId>;
+}) {
+  const provider = usePreferencesStore((s) => s.subagentProvider);
+  const modelId = usePreferencesStore((s) => s.subagentModelId);
+  const thinkingLevel = usePreferencesStore((s) => s.subagentThinkingLevel);
+
+  const items = useMemo(() => {
+    return MODELS.filter((m) => configuredIds.has(m.provider));
+  }, [configuredIds]);
+
+  const currentModel = useMemo(() => {
+    const fallback = items[0] ?? MODELS[0];
+    if (isLocalProvider(provider)) {
+      return MODELS.find((m) => m.provider === provider) ?? fallback;
+    }
+    return (
+      MODELS.find((m) => m.provider === provider && m.id === modelId) ??
+      MODELS.find((m) => m.id === modelId) ??
+      fallback
+    );
+  }, [items, provider, modelId]);
+
+  const setModel = (id: string, providerId: ProviderId) => {
+    void setSubagentProvider(providerId);
+    void setSubagentModelId(isLocalProvider(providerId) ? "" : id);
+  };
+
+  const grouped = useMemo(() => {
+    const map = new Map<ProviderId, (typeof items)[number][]>();
+    for (const m of items) {
+      const arr = map.get(m.provider) ?? [];
+      arr.push(m);
+      map.set(m.provider, arr);
+    }
+    return map;
+  }, [items]);
+
+  const hasKey = providerNeedsKey(provider) ? !!keys[provider] : true;
+  const canThink = supportsThinkingLevel(provider);
+  const thinkingLevels = getThinkingLevels(provider);
+  const currentThinking =
+    thinkingLevels.find((l) => l.value === thinkingLevel) ?? thinkingLevels[0];
+
+  return (
+    <>
+      <FieldRow label="Subagent">
+        <div className="flex flex-1 items-center gap-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                className="h-8 flex-1 justify-between gap-2 px-2.5 text-[11.5px]"
+              >
+                <span className="flex items-center gap-2 truncate">
+                  <ProviderIcon provider={currentModel.provider} size={12} />
+                  <span className="truncate">{currentModel.label}</span>
+                  <span className="text-muted-foreground">
+                    · {currentModel.hint}
+                  </span>
+                </span>
+                <HugeiconsIcon
+                  icon={ArrowDown01Icon}
+                  size={11}
+                  strokeWidth={2}
+                  className="opacity-70"
+                />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="start"
+              collisionPadding={12}
+              className="max-h-72 min-w-70 overflow-y-auto"
+            >
+              {PROVIDERS.map((p) => {
+                const list = grouped.get(p.id);
+                if (!list || list.length === 0) return null;
+                const pConfigured = configuredIds.has(p.id);
+                return (
+                  <div key={p.id} className="px-1 pt-1.5 first:pt-1">
+                    <div className="mb-0.5 flex items-center gap-1.5 px-2 text-[10px] font-medium tracking-wide text-muted-foreground uppercase">
+                      <ProviderIcon provider={p.id} size={11} />
+                      <span>{p.label}</span>
+                      {!pConfigured ? (
+                        <span className="ml-auto text-[9.5px] normal-case tracking-normal text-muted-foreground/70">
+                          not connected
+                        </span>
+                      ) : null}
+                    </div>
+                    {list.map((m) => (
+                      <DropdownMenuItem
+                        key={m.id}
+                        disabled={!pConfigured}
+                        onSelect={() => pConfigured && setModel(m.id, p.id)}
+                        className={cn(
+                          "text-[11.5px]",
+                          m.id === modelId && "bg-accent/50",
+                        )}
+                      >
+                        <span className="flex flex-col">
+                          <span>{m.label}</span>
+                          <span className="text-[10px] text-muted-foreground">
+                            {m.description}
+                          </span>
+                        </span>
+                      </DropdownMenuItem>
+                    ))}
+                  </div>
+                );
+              })}
+            </DropdownMenuContent>
+          </DropdownMenu>
+          {canThink ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  className="h-8 w-auto shrink-0 gap-1.5 px-2 text-[11.5px]"
+                >
+                  <HugeiconsIcon
+                    icon={BrainIcon}
+                    size={12}
+                    strokeWidth={1.5}
+                    className="shrink-0 text-muted-foreground/70"
+                  />
+                  <span>{currentThinking.label}</span>
+                  <HugeiconsIcon
+                    icon={ArrowDown01Icon}
+                    size={11}
+                    strokeWidth={2}
+                    className="opacity-70"
+                  />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="start"
+                collisionPadding={12}
+                className="min-w-40"
+              >
+                {thinkingLevels.map((l) => (
+                  <DropdownMenuItem
+                    key={l.value}
+                    onSelect={() =>
+                      void setSubagentThinkingLevel(
+                        l.value as ThinkingLevel,
+                      )
+                    }
+                    className={cn(
+                      "text-[11.5px]",
+                      l.value === thinkingLevel && "bg-accent/50",
+                    )}
+                  >
+                    <span>{l.label}</span>
+                    {l.value === thinkingLevel ? (
+                      <HugeiconsIcon
+                        icon={Tick01Icon}
+                        size={13}
+                        strokeWidth={2}
+                        className="ml-auto"
+                      />
+                    ) : null}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : null}
+        </div>
+      </FieldRow>
+      {!hasKey ? (
         <p className="pl-19 text-[10.5px] text-muted-foreground">
           {getProvider(provider).label} isn't connected — add it below.
         </p>

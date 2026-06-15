@@ -2,10 +2,13 @@ import { Button } from "@/components/ui/button";
 import { WindowControls } from "@/components/WindowControls";
 import { IS_MAC, USE_CUSTOM_WINDOW_CONTROLS } from "@/lib/platform";
 import { NotificationBell } from "@/modules/agents";
-import type { Tab } from "@/modules/tabs";
+import { type Tab, MAX_PANES_PER_TAB } from "@/modules/tabs";
 import { TabBar } from "@/modules/tabs";
 import {
+  Cancel01Icon,
   CommandIcon,
+  LayoutTwoColumnIcon,
+  LayoutTwoRowIcon,
   Settings01Icon,
   SidebarLeftIcon,
 } from "@hugeicons/core-free-icons";
@@ -22,6 +25,7 @@ import {
   type SearchInlineHandle,
   type SearchTarget,
 } from "./SearchInline";
+import { leafIds } from "@/modules/terminal/lib/panes";
 
 type Props = {
   tabs: Tab[];
@@ -46,6 +50,9 @@ type Props = {
   spaceSwitcher: ReactNode;
   searchTarget: SearchTarget;
   searchRef: RefObject<SearchInlineHandle | null>;
+  onSplitRight: () => void;
+  onSplitDown: () => void;
+  onClosePane: () => void;
 };
 
 const COMPACT_WIDTH = 720;
@@ -71,6 +78,9 @@ export function Header({
   spaceSwitcher,
   searchTarget,
   searchRef,
+  onSplitRight,
+  onSplitDown,
+  onClosePane,
 }: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
   const [compact, setCompact] = useState(false);
@@ -85,6 +95,12 @@ export function Header({
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
+
+  const activeTab = tabs.find((t) => t.id === activeId);
+  const isTerminal = activeTab?.kind === "terminal" && !activeTab.blocks;
+  const paneCount = isTerminal ? leafIds((activeTab as any).paneTree).length : 0;
+  const canSplit = isTerminal && paneCount < MAX_PANES_PER_TAB;
+  const canClosePane = isTerminal && paneCount > 1;
 
   const settingsButton = (
     <Button
@@ -163,6 +179,42 @@ export function Header({
       </div>
 
       <SearchInline ref={searchRef} target={searchTarget} compact={compact} />
+
+      {isTerminal && (
+        <div className="flex items-center gap-0.5 animate-in fade-in duration-200">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-7 shrink-0 rounded-md text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-35 disabled:hover:bg-transparent"
+            onClick={onSplitRight}
+            disabled={!canSplit}
+            title="Split Pane Right (Vertical Split)"
+          >
+            <HugeiconsIcon icon={LayoutTwoColumnIcon} size={15} strokeWidth={1.75} />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-7 shrink-0 rounded-md text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-35 disabled:hover:bg-transparent"
+            onClick={onSplitDown}
+            disabled={!canSplit}
+            title="Split Pane Down (Horizontal Split)"
+          >
+            <HugeiconsIcon icon={LayoutTwoRowIcon} size={15} strokeWidth={1.75} />
+          </Button>
+          {canClosePane && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-7 shrink-0 rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+              onClick={onClosePane}
+              title="Close Active Pane"
+            >
+              <HugeiconsIcon icon={Cancel01Icon} size={15} strokeWidth={1.75} />
+            </Button>
+          )}
+        </div>
+      )}
 
       {/* Panel toggles — right side */}
       {settingsButton}

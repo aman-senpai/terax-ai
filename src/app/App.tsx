@@ -1068,6 +1068,9 @@ export default function App() {
               spaceSwitcher={spaceSwitcher}
               searchTarget={searchTarget}
               searchRef={searchInlineRef}
+              onSplitRight={() => splitActivePaneInActiveTab("row")}
+              onSplitDown={() => splitActivePaneInActiveTab("col")}
+              onClosePane={() => closeActivePane(activeId)}
             />
           )}
 
