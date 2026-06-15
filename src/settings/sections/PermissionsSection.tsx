@@ -32,7 +32,8 @@ const TOOL_LABELS: Record<keyof ToolPermissions, string> = {
 
 const TOOL_DESCRIPTIONS: Record<keyof ToolPermissions, string> = {
   bash_run: "Execute arbitrary shell commands in the terminal.",
-  bash_background: "Spawn a long-running child process that outlives the agent.",
+  bash_background:
+    "Spawn a long-running child process that outlives the agent.",
   write_file: "Create or overwrite files on disk.",
   edit: "Apply surgical edits (insert, replace, delete) within existing files.",
   multi_edit: "Apply multiple edits across files in a single operation.",
@@ -158,7 +159,8 @@ export function PermissionsSection() {
       <div className="flex flex-col gap-2">
         <Label>Shell Command Allowlist</Label>
         <p className="text-[10.5px] leading-relaxed text-muted-foreground -mt-1">
-          Commands matching an enabled pattern will be auto-approved without a prompt.
+          Commands matching an enabled pattern will be auto-approved without a
+          prompt.
         </p>
         <div className="flex flex-col gap-1.5">
           {permissions.shellAllowlist.map((entry, i) => (
@@ -184,7 +186,11 @@ export function PermissionsSection() {
                 className="flex shrink-0 items-center justify-center rounded p-1 text-muted-foreground hover:text-foreground transition-colors"
                 aria-label="Remove pattern"
               >
-                <HugeiconsIcon icon={Delete02Icon} size={14} strokeWidth={1.75} />
+                <HugeiconsIcon
+                  icon={Delete02Icon}
+                  size={14}
+                  strokeWidth={1.75}
+                />
               </button>
             </div>
           ))}
@@ -225,7 +231,11 @@ export function PermissionsSection() {
                 className="flex shrink-0 items-center justify-center rounded p-1 text-muted-foreground hover:text-foreground transition-colors"
                 aria-label="Remove directory"
               >
-                <HugeiconsIcon icon={Delete02Icon} size={14} strokeWidth={1.75} />
+                <HugeiconsIcon
+                  icon={Delete02Icon}
+                  size={14}
+                  strokeWidth={1.75}
+                />
               </button>
             </div>
           ))}

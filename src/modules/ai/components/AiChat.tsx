@@ -24,13 +24,16 @@ import { cn } from "@/lib/utils";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
   ArrowRight01Icon,
+  CheckmarkCircle01Icon,
   CodeIcon,
+  CopyIcon,
   File01Icon,
   HashtagIcon,
   TerminalIcon,
 } from "@hugeicons/core-free-icons";
 import { SLASH_COMMANDS, TERAX_CMD_RE } from "../lib/slashCommands";
 import { Spinner } from "@/components/ui/spinner";
+import { Button } from "@/components/ui/button";
 import { useChatStore } from "../store/chatStore";
 import { sendMessage } from "../store/chatRuntime";
 import type {
@@ -40,7 +43,7 @@ import type {
   UIMessage,
   UIMessagePart,
 } from "ai";
-import { memo, useCallback, useEffect, useMemo, useRef } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AiToolApproval } from "./AiToolApproval";
 
 function CommandSnippet({ name }: { name: string }) {
@@ -79,8 +82,7 @@ type ContextChip =
 
 const SELECTION_RE =
   /<selection\s+source="(terminal|editor)">\n?([\s\S]*?)\n?<\/selection>/g;
-const FILE_RE =
-  /<file\s+name="([^"]+)"[^>]*>\n?([\s\S]*?)\n?<\/file>/g;
+const FILE_RE = /<file\s+name="([^"]+)"[^>]*>\n?([\s\S]*?)\n?<\/file>/g;
 const SNIPPET_RE = /<snippet\s+name="([^"]+)">\n?[\s\S]*?\n?<\/snippet>/g;
 
 function countLines(s: string): number {
@@ -200,7 +202,8 @@ export function AiChatView({
     !isBusy && hitStepCap && lastMessage?.role === "assistant";
 
   const onApproval = useCallback(
-    (id: string, approved: boolean) => addToolApprovalResponse({ id, approved }),
+    (id: string, approved: boolean) =>
+      addToolApprovalResponse({ id, approved }),
     [addToolApprovalResponse],
   );
 
@@ -363,6 +366,53 @@ const ContinueRow = memo(function ContinueRow({
   );
 });
 
+const CopyMessageButton = memo(function CopyMessageButton({
+  text,
+  label,
+}: {
+  text: string;
+  label?: string;
+}) {
+  const [copied, setCopied] = useState(false);
+  const tRef = useRef<number>(0);
+
+  useEffect(() => () => window.clearTimeout(tRef.current), []);
+
+  const onCopy = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!navigator?.clipboard?.writeText) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      tRef.current = window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* swallow */
+    }
+  };
+
+  return (
+    <Button
+      type="button"
+      size={label ? "xs" : "icon-xs"}
+      variant="ghost"
+      onClick={onCopy}
+      className={cn(
+        "text-muted-foreground hover:bg-muted/40 hover:text-foreground rounded-md transition-colors",
+        label ? "h-6 gap-1.5 px-2 text-[10px]" : "size-6",
+      )}
+      aria-label={label || "Copy message"}
+      title={label || "Copy message"}
+    >
+      <HugeiconsIcon
+        icon={copied ? CheckmarkCircle01Icon : CopyIcon}
+        size={label ? 11 : 12}
+        strokeWidth={1.75}
+      />
+      {label && <span>{copied ? "Copied" : label}</span>}
+    </Button>
+  );
+});
+
 const RenderedMessage = memo(function RenderedMessage({
   message,
   onApproval,
@@ -400,24 +450,37 @@ const RenderedMessage = memo(function RenderedMessage({
 
     return (
       <Message from="user">
-        <MessageContent>
-          {commandName ? <CommandSnippet name={commandName} /> : null}
-          {stripped.chips.length > 0 ? (
-            <ContextChips chips={stripped.chips} />
-          ) : null}
-          {stripped.text ? (
-            <p className="whitespace-pre-wrap wrap-break-word">
-              {stripped.text}
-            </p>
-          ) : null}
-        </MessageContent>
+        <div className="relative group/user-msg flex items-center gap-2 max-w-full">
+          <div className="opacity-0 group-hover/user-msg:opacity-100 transition-opacity duration-150 shrink-0">
+            <CopyMessageButton text={stripped.text || rawText} />
+          </div>
+          <MessageContent>
+            {commandName ? <CommandSnippet name={commandName} /> : null}
+            {stripped.chips.length > 0 ? (
+              <ContextChips chips={stripped.chips} />
+            ) : null}
+            {stripped.text ? (
+              <p className="whitespace-pre-wrap wrap-break-word">
+                {stripped.text}
+              </p>
+            ) : null}
+          </MessageContent>
+        </div>
       </Message>
     );
   }
 
-  const groups = useMemo(() => buildPartGroups(message.parts as AnyPart[]), [
-    message.parts,
-  ]);
+  const groups = useMemo(
+    () => buildPartGroups(message.parts as AnyPart[]),
+    [message.parts],
+  );
+
+  const assistantText = useMemo(() => {
+    return message.parts
+      .filter((p): p is { type: "text"; text: string } => p.type === "text")
+      .map((p) => p.text)
+      .join("\n");
+  }, [message.parts]);
 
   return (
     <Message from={message.role}>
@@ -457,6 +520,11 @@ const RenderedMessage = memo(function RenderedMessage({
           })}
         </div>
       </MessageContent>
+      {assistantText && (
+        <div className="mt-1 flex items-center justify-start px-1">
+          <CopyMessageButton text={assistantText} label="Copy response" />
+        </div>
+      )}
     </Message>
   );
 });
@@ -589,9 +657,7 @@ const ReadGroup = memo(function ReadGroup({ parts }: { parts: AnyPart[] }) {
                 strokeWidth={1.75}
                 className="shrink-0 opacity-60"
               />
-              <span className="truncate text-foreground">
-                {basename(path)}
-              </span>
+              <span className="truncate text-foreground">{basename(path)}</span>
               <span className="truncate opacity-60">{path}</span>
             </li>
           ))}

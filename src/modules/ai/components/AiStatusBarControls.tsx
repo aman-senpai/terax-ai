@@ -113,8 +113,7 @@ export function ModelDropdown() {
   const inputRef = useRef<HTMLInputElement>(null);
 
   const isProviderConfigured = (id: ProviderId): boolean => {
-    if (id === "openrouter")
-      return !!apiKeys[id] && !!openrouterModelId.trim();
+    if (id === "openrouter") return !!apiKeys[id] && !!openrouterModelId.trim();
     if (providerNeedsKey(id)) return !!apiKeys[id];
     if (id === "lmstudio") return !!lmstudioModelId.trim();
     if (id === "mlx") return !!mlxModelId.trim();
@@ -156,21 +155,39 @@ export function ModelDropdown() {
 
   // When searching: flat filtered list. Otherwise: grouped by section.
   const sections = useMemo(() => {
-    const favs = q
-      ? []
-      : allModels.filter((m) => favoriteIds.includes(m.id));
-    const groups: { key: string; label: string; icon: typeof FavouriteIcon; models: ModelInfo[] }[] = [];
+    const favs = q ? [] : allModels.filter((m) => favoriteIds.includes(m.id));
+    const groups: {
+      key: string;
+      label: string;
+      icon: typeof FavouriteIcon;
+      models: ModelInfo[];
+    }[] = [];
     if (favs.length > 0) {
-      groups.push({ key: "favorites", label: "Favorites", icon: FavouriteIcon, models: favs });
+      groups.push({
+        key: "favorites",
+        label: "Favorites",
+        icon: FavouriteIcon,
+        models: favs,
+      });
     }
     for (const p of configuredProviders) {
       const models = allModels.filter((m) => m.provider === p.id);
       if (models.length > 0) {
-        groups.push({ key: p.id, label: p.label, icon: PROVIDER_ICON[p.id], models });
+        groups.push({
+          key: p.id,
+          label: p.label,
+          icon: PROVIDER_ICON[p.id],
+          models,
+        });
       }
     }
     if (epModelInfos.length > 0 && !q) {
-      groups.push({ key: "__compat__", label: "OpenAI Compatible", icon: PlugIcon, models: epModelInfos });
+      groups.push({
+        key: "__compat__",
+        label: "OpenAI Compatible",
+        icon: PlugIcon,
+        models: epModelInfos,
+      });
     }
     return groups;
   }, [allModels, favoriteIds, configuredProviders, epModelInfos, q]);
@@ -183,7 +200,8 @@ export function ModelDropdown() {
         m.hint.toLowerCase().includes(q) ||
         m.description.toLowerCase().includes(q) ||
         m.provider.includes(q) ||
-        ("tags" in m && (m as ModelInfo).tags?.some((t: string) => t.includes(q))),
+        ("tags" in m &&
+          (m as ModelInfo).tags?.some((t: string) => t.includes(q))),
     );
   }, [allModels, q]);
 
@@ -197,7 +215,7 @@ export function ModelDropdown() {
           variant="ghost"
           size="sm"
           className={cn(
-            "h-5.5 gap-1 rounded-md px-1.5 my-1 text-xs hover:bg-accent hover:text-foreground min-w-0 overflow-hidden",
+            "h-5.5 gap-1 rounded-md px-1.5 my-1 text-xs hover:bg-accent hover:text-foreground min-w-0 overflow-hidden shrink",
             currentProviderHasKey
               ? "text-muted-foreground"
               : "text-amber-600 dark:text-amber-400",
@@ -276,7 +294,11 @@ export function ModelDropdown() {
             sections.map((section) => (
               <div key={section.key}>
                 <div className="flex items-center gap-1.5 px-3 pt-2 pb-1 text-[11px] font-medium tracking-tight text-muted-foreground/90">
-                  <HugeiconsIcon icon={section.icon} size={12} strokeWidth={1.75} />
+                  <HugeiconsIcon
+                    icon={section.icon}
+                    size={12}
+                    strokeWidth={1.75}
+                  />
                   <span>{section.label}</span>
                 </div>
                 {section.models.map((m) => (
@@ -347,9 +369,7 @@ function ModelRow({
           strokeWidth={2}
           className={cn(
             "absolute text-foreground transition-opacity",
-            selected
-              ? "opacity-100 group-hover:opacity-0"
-              : "opacity-0",
+            selected ? "opacity-100 group-hover:opacity-0" : "opacity-0",
           )}
         />
         {/* Star — visible only on hover */}
@@ -369,7 +389,8 @@ function ModelRow({
             strokeWidth={favorite ? 2 : 1.75}
             className={cn(
               "text-muted-foreground/50 hover:text-foreground/80",
-              favorite && "fill-foreground/60 text-foreground/60 hover:text-foreground/80",
+              favorite &&
+                "fill-foreground/60 text-foreground/60 hover:text-foreground/80",
             )}
           />
         </button>
@@ -377,4 +398,3 @@ function ModelRow({
     </DropdownMenuItem>
   );
 }
-

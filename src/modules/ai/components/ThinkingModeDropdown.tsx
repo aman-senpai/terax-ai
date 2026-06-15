@@ -12,11 +12,13 @@ import {
   Tick01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { getModel, isCompatModelId, type ModelId, type ProviderId } from "../config";
 import {
-  getThinkingLevels,
-  supportsThinkingLevel,
-} from "../lib/thinking";
+  getModel,
+  isCompatModelId,
+  type ModelId,
+  type ProviderId,
+} from "../config";
+import { getThinkingLevels, supportsThinkingLevel } from "../lib/thinking";
 import { useChatStore } from "../store/chatStore";
 
 export function ThinkingModeDropdown() {
@@ -46,7 +48,7 @@ export function ThinkingModeDropdown() {
           size="sm"
           disabled={!canThink}
           className={cn(
-            "h-5.5 gap-1 rounded-md px-1.5 my-1 text-xs hover:bg-accent hover:text-foreground min-w-0 overflow-hidden",
+            "h-5.5 gap-1 rounded-md px-1.5 my-1 text-xs hover:bg-accent hover:text-foreground min-w-0 overflow-hidden shrink",
             canThink
               ? level === "off"
                 ? "text-muted-foreground/50"
@@ -91,7 +93,9 @@ export function ThinkingModeDropdown() {
                 }}
                 className={cn(
                   "group mx-1 my-0.5 flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5",
-                  active ? "bg-accent/60 text-foreground" : "text-foreground/85",
+                  active
+                    ? "bg-accent/60 text-foreground"
+                    : "text-foreground/85",
                 )}
               >
                 <span className="text-[12px] font-medium leading-none">

@@ -14,6 +14,10 @@ const SelectionAskAiInner = lazy(() =>
   import("./SelectionAskAi").then((m) => ({ default: m.SelectionAskAi })),
 );
 
+const RightPanelInner = lazy(() =>
+  import("./RightPanel").then((m) => ({ default: m.RightPanel })),
+);
+
 export function AgentRunBridge(props: AgentRunBridgeProps) {
   return (
     <Suspense fallback={null}>
@@ -34,6 +38,14 @@ export function SelectionAskAi(props: SelectionAskAiProps) {
   return (
     <Suspense fallback={null}>
       <SelectionAskAiInner {...props} />
+    </Suspense>
+  );
+}
+
+export function RightPanel() {
+  return (
+    <Suspense fallback={null}>
+      <RightPanelInner />
     </Suspense>
   );
 }

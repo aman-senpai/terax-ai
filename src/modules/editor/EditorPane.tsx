@@ -321,7 +321,15 @@ export const EditorPane = forwardRef<EditorPaneHandle, Props>(
     }
     if (doc.status === "binary" || doc.status === "toolarge") {
       const ext = path.split(".").pop()?.toLowerCase() ?? "";
-      const isImage = ["png", "jpg", "jpeg", "gif", "webp", "svg", "ico"].includes(ext);
+      const isImage = [
+        "png",
+        "jpg",
+        "jpeg",
+        "gif",
+        "webp",
+        "svg",
+        "ico",
+      ].includes(ext);
       const isVideo = ["mp4", "webm", "ogg", "mov"].includes(ext);
       const isAudio = ["mp3", "wav", "flac", "aac", "m4a"].includes(ext);
       const isPdf = ext === "pdf";
@@ -337,10 +345,11 @@ export const EditorPane = forwardRef<EditorPaneHandle, Props>(
                 decoding="async"
                 className="max-w-full max-h-full object-contain rounded-md border border-border shadow-sm"
                 style={{
-                  backgroundImage: 'conic-gradient(#e5e7eb 0.25turn, #f3f4f6 0.25turn 0.5turn, #e5e7eb 0.5turn 0.75turn, #f3f4f6 0.75turn)',
-                  backgroundSize: '20px 20px',
+                  backgroundImage:
+                    "conic-gradient(#e5e7eb 0.25turn, #f3f4f6 0.25turn 0.5turn, #e5e7eb 0.5turn 0.75turn, #f3f4f6 0.75turn)",
+                  backgroundSize: "20px 20px",
                 }}
-                alt={path.split('/').pop()}
+                alt={path.split("/").pop()}
               />
             )}
             {isVideo && (
@@ -365,7 +374,7 @@ export const EditorPane = forwardRef<EditorPaneHandle, Props>(
               <iframe
                 src={assetUrl}
                 className="w-full h-full border-none"
-                title={path.split('/').pop()}
+                title={path.split("/").pop()}
               />
             )}
           </div>

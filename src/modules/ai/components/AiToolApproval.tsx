@@ -56,10 +56,7 @@ function AiToolApprovalImpl({
     if (e.key === "Enter" || (isMeta && e.key.toLowerCase() === "y")) {
       e.preventDefault();
       onRespond(true);
-    } else if (
-      e.key === "Escape" ||
-      (isMeta && e.key.toLowerCase() === "n")
-    ) {
+    } else if (e.key === "Escape" || (isMeta && e.key.toLowerCase() === "n")) {
       e.preventDefault();
       onRespond(false);
     }
@@ -102,9 +99,7 @@ function AiToolApprovalImpl({
           strokeWidth={1.75}
           className="shrink-0 text-muted-foreground"
         />
-        <span className="text-[12px] font-medium text-foreground">
-          {label}
-        </span>
+        <span className="text-[12px] font-medium text-foreground">{label}</span>
         <span className="ml-auto text-[10px] text-muted-foreground">
           needs approval
         </span>
@@ -260,13 +255,7 @@ function PreviewBlock({
   );
 }
 
-function DiffBlock({
-  oldStr,
-  newStr,
-}: {
-  oldStr: string;
-  newStr: string;
-}) {
+function DiffBlock({ oldStr, newStr }: { oldStr: string; newStr: string }) {
   const oldLines = oldStr ? oldStr.split("\n") : [];
   const newLines = newStr ? newStr.split("\n") : [];
   const lines: Array<{ kind: "removed" | "added"; text: string }> = [];
@@ -287,10 +276,8 @@ function DiffBlock({
           key={i}
           className={cn(
             "whitespace-pre text-[11px] leading-relaxed",
-            line.kind === "removed" &&
-              "bg-destructive/15 text-destructive",
-            line.kind === "added" &&
-              "bg-emerald-500/15 text-emerald-600",
+            line.kind === "removed" && "bg-destructive/15 text-destructive",
+            line.kind === "added" && "bg-emerald-500/15 text-emerald-600",
           )}
         >
           {line.kind === "removed" ? "- " : "+ "}

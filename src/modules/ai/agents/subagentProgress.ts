@@ -21,31 +21,83 @@ export type PendingApproval = {
   input: unknown;
 };
 
-type Listener = () => void;
+// ── Global singleton — all mutable state lives on globalThis so bundler
+//    code-splitting cannot create separate module instances. If it did,
+//    finishSubagent would write to one `state` Map while getSubagentState
+//    reads from another, and getProgressVersion would return a version
+//    that never matches what notify() increments. ──────────────────────────
+const GLOBAL_KEY = "__terax_subagent_progress_store__";
 
-const state = new Map<string, SubagentStreamState>();
-const listeners = new Set<Listener>();
+type GlobalStore = {
+  bus: EventTarget;
+  state: Map<string, SubagentStreamState>;
+  approvalResolvers: Map<string, Map<number, (approved: boolean) => void>>;
+  currentBatch: Array<{ jobId: string; desc: string }>;
+  tick: number;
+};
 
-/** Map from jobId → Map<stepIndex, resolve(approved: boolean)> */
-const approvalResolvers = new Map<string, Map<number, (approved: boolean) => void>>();
+function getStore(): GlobalStore {
+  const _g = globalThis as Record<string, unknown>;
+  let s = _g[GLOBAL_KEY] as GlobalStore | undefined;
+  if (!s) {
+    s = {
+      bus: new EventTarget(),
+      state: new Map(),
+      approvalResolvers: new Map(),
+      currentBatch: [],
+      tick: 0,
+    };
+    _g[GLOBAL_KEY] = s;
+  }
+  return s;
+}
 
-/** Map from task index → jobId for the current batch. */
-let currentBatch: Array<{ jobId: string; desc: string }> = [];
+const EVT = "progress";
 
 export function registerBatch(tasks: Array<{ jobId: string; desc: string }>) {
-  currentBatch = tasks;
+  const store = getStore();
+  store.currentBatch = tasks;
+  // Eagerly create progress-store entries so getSubagentState never
+  // returns null — cards render with real state from the first frame.
+  for (const t of tasks) {
+    if (!store.state.has(t.jobId)) {
+      store.state.set(t.jobId, {
+        status: "running",
+        text: "",
+        steps: [],
+        reasoning: "",
+        startedAt: Date.now(),
+        pendingApprovals: [],
+      });
+    }
+  }
+  notify();
 }
 
 export function getCurrentBatch(): Array<{ jobId: string; desc: string }> {
-  return currentBatch;
+  return getStore().currentBatch;
+}
+
+export function getProgressVersion(): number {
+  return getStore().tick;
+}
+
+/** Subscribe using the global EventTarget — immune to module duplication. */
+export function subscribeProgress(cb: () => void): () => void {
+  const { bus } = getStore();
+  bus.addEventListener(EVT, cb);
+  return () => bus.removeEventListener(EVT, cb);
 }
 
 function notify() {
-  for (const fn of listeners) fn();
+  const store = getStore();
+  store.tick++;
+  store.bus.dispatchEvent(new Event(EVT));
 }
 
 function getOrCreate(jobId: string): SubagentStreamState {
-  let s = state.get(jobId);
+  const store = getStore();
+  let s = store.state.get(jobId);
   if (!s) {
     s = {
       status: "running",
@@ -55,7 +107,7 @@ function getOrCreate(jobId: string): SubagentStreamState {
       startedAt: Date.now(),
       pendingApprovals: [],
     };
-    state.set(jobId, s);
+    store.state.set(jobId, s);
   }
   return s;
 }
@@ -107,9 +159,7 @@ export function pushToolResult(
 ) {
   const s = getOrCreate(jobId);
   const step = s.steps.find(
-    (st) =>
-      st.state === "pending" ||
-      st.state === "awaiting-approval",
+    (st) => st.state === "pending" || st.state === "awaiting-approval",
   );
   if (step) {
     step.output = output;
@@ -137,10 +187,11 @@ export function pushApprovalRequired(
   }
 
   return new Promise<boolean>((resolve) => {
-    if (!approvalResolvers.has(jobId)) {
-      approvalResolvers.set(jobId, new Map());
+    const store = getStore();
+    if (!store.approvalResolvers.has(jobId)) {
+      store.approvalResolvers.set(jobId, new Map());
     }
-    approvalResolvers.get(jobId)!.set(stepIndex, resolve);
+    store.approvalResolvers.get(jobId)!.set(stepIndex, resolve);
     notify();
   });
 }
@@ -151,14 +202,15 @@ export function resolveApproval(
   stepIndex: number,
   approved: boolean,
 ): boolean {
-  const resolvers = approvalResolvers.get(jobId);
+  const store = getStore();
+  const resolvers = store.approvalResolvers.get(jobId);
   if (!resolvers) return false;
   const fn = resolvers.get(stepIndex);
   if (!fn) return false;
   fn(approved);
   resolvers.delete(stepIndex);
   // Update the step state in the progress store.
-  const s = state.get(jobId);
+  const s = store.state.get(jobId);
   if (s) {
     const step = s.steps[stepIndex];
     if (step) {
@@ -177,29 +229,32 @@ export function resolveApproval(
 }
 
 export function finishSubagent(jobId: string, error?: string) {
+  const store = getStore();
   const s = getOrCreate(jobId);
   s.status = error ? "error" : "done";
   if (error) s.error = error;
   // Auto-deny any remaining pending approvals.
-  const resolvers = approvalResolvers.get(jobId);
+  const resolvers = store.approvalResolvers.get(jobId);
   if (resolvers) {
     for (const [, fn] of resolvers) fn(false);
-    approvalResolvers.delete(jobId);
+    store.approvalResolvers.delete(jobId);
   }
   notify();
 }
 
 export function getSubagentState(jobId: string): SubagentStreamState | null {
-  return state.get(jobId) ?? null;
+  return getStore().state.get(jobId) ?? null;
 }
 
-export function subscribeSubagentProgress(fn: Listener): () => void {
-  listeners.add(fn);
-  return () => { listeners.delete(fn); };
+export function subscribeSubagentProgress(fn: () => void): () => void {
+  const { bus } = getStore();
+  bus.addEventListener(EVT, fn);
+  return () => bus.removeEventListener(EVT, fn);
 }
 
 export function cleanupSubagent(jobId: string) {
-  state.delete(jobId);
-  approvalResolvers.delete(jobId);
+  const store = getStore();
+  store.state.delete(jobId);
+  store.approvalResolvers.delete(jobId);
   notify();
 }

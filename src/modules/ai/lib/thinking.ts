@@ -41,8 +41,8 @@ export function getThinkingLevels(
   if (provider === "deepseek") {
     // DeepSeek only supports off / high / max.
     // "low" and "medium" are mapped to "high" server-side.
-    return THINKING_LEVELS.filter((l) =>
-      l.value === "off" || l.value === "high" || l.value === "max",
+    return THINKING_LEVELS.filter(
+      (l) => l.value === "off" || l.value === "high" || l.value === "max",
     );
   }
   return THINKING_LEVELS;
@@ -63,7 +63,10 @@ export function buildThinkingProviderOptions(
   provider: ProviderId,
   level: ThinkingLevel,
   modelId?: string,
-): Record<string, Record<string, string | number | Record<string, string | number>>> {
+): Record<
+  string,
+  Record<string, string | number | Record<string, string | number>>
+> {
   if (!supportsThinkingLevel(provider) || level === "off") {
     if (provider === "deepseek") {
       return { deepseek: { thinking: { type: "disabled" } } };

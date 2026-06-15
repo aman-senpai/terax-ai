@@ -7,7 +7,6 @@ import {
   ContextTrigger,
 } from "@/components/ai-elements/context";
 import { Button } from "@/components/ui/button";
-import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 import { useChat, type UIMessage } from "@ai-sdk/react";
 import {
@@ -16,14 +15,20 @@ import {
   ArrowDown01Icon,
   CheckListIcon,
   Delete02Icon,
+  Edit02Icon,
   FilterIcon,
   FlashIcon,
   ShieldUserIcon,
   TerminalIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useEffect, useMemo, useRef } from "react";
-import { estimateCost, getModel, getModelContextLimit, type ModelId } from "../config";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  estimateCost,
+  getModel,
+  getModelContextLimit,
+  type ModelId,
+} from "../config";
 import { ACCEPTED_FILES, useComposer } from "../lib/composer";
 import type { SessionMeta } from "../lib/sessions";
 import { useChatStore } from "../store/chatStore";
@@ -78,11 +83,7 @@ export function RightPanel() {
 
   return (
     <div className="flex h-full min-h-0 flex-col border-l border-border/60 bg-card text-[12px]">
-      {sessionId ? (
-        <Body sessionId={sessionId} />
-      ) : (
-        <EmptyShell />
-      )}
+      {sessionId ? <Body sessionId={sessionId} /> : <EmptyShell />}
       <PlanDiffReview />
     </div>
   );
@@ -92,7 +93,6 @@ function Body({ sessionId }: { sessionId: string }) {
   const c = useComposer();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const focusInput = useChatStore((s) => s.focusInput);
-  const step = useChatStore((s) => s.agentMeta.step);
   const sessions = useChatStore((s) => s.sessions);
   const activeId = useChatStore((s) => s.activeSessionId);
   const newSession = useChatStore((s) => s.newSession);
@@ -103,8 +103,6 @@ function Body({ sessionId }: { sessionId: string }) {
 
   const chat = useMemo(() => getOrCreateChat(sessionId), [sessionId]);
   const helpers = useChat<UIMessage>({ chat });
-  const isBusy =
-    helpers.status === "submitted" || helpers.status === "streaming";
 
   const active = sessions.find((s) => s.id === activeId) ?? null;
   const activeTitle = active?.title || "New chat";
@@ -112,8 +110,7 @@ function Body({ sessionId }: { sessionId: string }) {
   return (
     <>
       <Header
-        step={step}
-        isBusy={isBusy}
+        sessionId={sessionId}
         title={activeTitle}
         onNewSession={() => {
           newSession();
@@ -168,8 +165,8 @@ function Body({ sessionId }: { sessionId: string }) {
           }}
         />
         <AiComposerInput />
-        <div className="mt-1.5 flex items-center flex-wrap gap-x-2 gap-y-1 min-w-0">
-          <div className="flex min-w-0 items-center gap-2">
+        <div className="mt-1.5 flex items-center justify-between gap-1.5 min-w-0 w-full">
+          <div className="flex min-w-0 items-center gap-1.5 shrink">
             <Button
               type="button"
               variant="ghost"
@@ -184,7 +181,7 @@ function Body({ sessionId }: { sessionId: string }) {
             <ContextIndicator messages={helpers.messages} />
             <AgentSwitcher />
           </div>
-          <div className="flex min-w-0 items-center gap-1 ml-auto">
+          <div className="flex min-w-0 items-center gap-1 shrink ml-auto">
             <ThinkingModeDropdown />
             <ModelDropdown />
           </div>
@@ -221,12 +218,7 @@ function PlanModeStrip() {
 function EmptyShell() {
   return (
     <>
-      <Header
-        step={null}
-        isBusy={false}
-        title="Loading…"
-        onNewSession={() => {}}
-      />
+      <Header title="Loading…" onNewSession={() => {}} />
       <div className="flex flex-1 items-center justify-center text-[11px] text-muted-foreground">
         Loading sessions…
       </div>
@@ -235,13 +227,11 @@ function EmptyShell() {
 }
 
 function Header({
-  step,
-  isBusy,
+  sessionId,
   title,
   onNewSession,
 }: {
-  step: string | null;
-  isBusy: boolean;
+  sessionId?: string | null;
   title: string;
   onNewSession: () => void;
 }) {
@@ -249,23 +239,65 @@ function Header({
   const toggleHistory = useChatStore((s) => s.toggleHistory);
   const permissionMode = useChatStore((s) => s.permissionMode);
   const setPermissionMode = useChatStore((s) => s.setPermissionMode);
+  const renameSession = useChatStore((s) => s.renameSession);
+
+  const [isEditing, setIsEditing] = useState(false);
+  const [editValue, setEditValue] = useState(title);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reset editing state on session switch
+  useEffect(() => {
+    setEditValue(title);
+    setIsEditing(false);
+  }, [title, sessionId]);
+
+  const handleSave = () => {
+    if (sessionId && editValue.trim() && editValue.trim() !== title) {
+      renameSession(sessionId, editValue.trim());
+    }
+    setIsEditing(false);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      handleSave();
+    } else if (e.key === "Escape") {
+      setEditValue(title);
+      setIsEditing(false);
+    }
+  };
 
   return (
-    <div className="relative flex h-8 shrink-0 items-center gap-2 border-b border-border/60 px-2">
-      <div className="flex min-w-0 items-center gap-1.5">
-        {isBusy ? (
-          <span className="flex min-w-0 items-center gap-1 text-[10px] text-muted-foreground">
-            <Spinner className="size-2.5" />
-            <span className="max-w-32 truncate">{step ?? "Thinking…"}</span>
+    <div className="flex h-8 shrink-0 items-center gap-2 border-b border-border/60 px-2">
+      {isEditing ? (
+        <input
+          type="text"
+          value={editValue}
+          onChange={(e) => setEditValue(e.target.value)}
+          onBlur={handleSave}
+          onKeyDown={handleKeyDown}
+          className="min-w-0 flex-1 bg-background border border-border/80 rounded px-1.5 py-0.5 text-[11px] font-semibold text-foreground/85 outline-none focus:ring-1 focus:ring-ring h-6"
+          // biome-ignore lint/a11y/noAutofocus: autofocus is required for inline editing UX
+          autoFocus
+        />
+      ) : (
+        <button
+          type="button"
+          className="group flex min-w-0 flex-1 items-center gap-1 cursor-pointer bg-transparent border-0 p-0 text-left outline-none"
+          onClick={() => sessionId && setIsEditing(true)}
+          title={sessionId ? "Click to rename session" : undefined}
+        >
+          {sessionId && (
+            <span className="opacity-0 group-hover:opacity-100 transition-opacity duration-150 shrink-0 text-muted-foreground hover:text-foreground">
+              <HugeiconsIcon icon={Edit02Icon} size={11} strokeWidth={2} />
+            </span>
+          )}
+          <span className="min-w-0 flex-1 truncate text-[11px] font-semibold text-foreground/80 px-1">
+            {title}
           </span>
-        ) : null}
-      </div>
+        </button>
+      )}
 
-      <span className="absolute left-1/2 -translate-x-1/2 max-w-48 truncate text-[11px] text-muted-foreground pointer-events-none">
-        {title}
-      </span>
-
-      <div className="flex min-w-0 flex-1 items-center justify-end gap-0.5">
+      <div className="flex min-w-0 shrink-0 items-center justify-end gap-0.5">
         <button
           type="button"
           onClick={() => setPermissionMode("read-only")}
@@ -323,10 +355,7 @@ function Header({
             icon={ArrowDown01Icon}
             size={11}
             strokeWidth={2}
-            className={cn(
-              "transition-transform",
-              historyOpen && "rotate-180",
-            )}
+            className={cn("transition-transform", historyOpen && "rotate-180")}
           />
         </button>
         <button
@@ -436,7 +465,9 @@ function ContextIndicator({ messages }: { messages: UIMessage[] }) {
               {tokens.cachedInputTokens > 0 && (
                 <div className="flex items-center justify-between text-muted-foreground">
                   <span>Cache hit</span>
-                  <span className="font-mono text-foreground">{cacheRate}%</span>
+                  <span className="font-mono text-foreground">
+                    {cacheRate}%
+                  </span>
                 </div>
               )}
               {cost != null && (
@@ -483,78 +514,80 @@ function HistoryPanel({
 
   return (
     <div className="max-h-[40vh] shrink-0 overflow-y-auto scrollbar-visible [scrollbar-gutter:stable] border-b border-border/60 bg-muted/30 animate-in slide-in-from-top-1 duration-150">
-        {sorted.map((s) => (
+      {sorted.map((s) => (
+        <button
+          key={s.id}
+          type="button"
+          onClick={() => onSelect(s.id)}
+          className={cn(
+            "group flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left",
+            "text-[11px] transition-colors hover:bg-accent/40",
+            s.id === activeId
+              ? "bg-accent/40 text-foreground"
+              : "text-muted-foreground",
+          )}
+        >
+          <span className="min-w-0 flex-1 truncate">
+            {s.title || "New chat"}
+          </span>
           <button
-            key={s.id}
             type="button"
-            onClick={() => onSelect(s.id)}
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete(s.id);
+            }}
+            title="Delete session"
             className={cn(
-              "group flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left",
-              "text-[11px] transition-colors hover:bg-accent/40",
-              s.id === activeId
-                ? "bg-accent/40 text-foreground"
-                : "text-muted-foreground",
+              "rounded p-0.5 text-muted-foreground opacity-0 transition-opacity",
+              "hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100",
             )}
           >
-            <span className="min-w-0 flex-1 truncate">
-              {s.title || "New chat"}
-            </span>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onDelete(s.id);
-              }}
-              title="Delete session"
-              className={cn(
-                "rounded p-0.5 text-muted-foreground opacity-0 transition-opacity",
-                "hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100",
-              )}
-            >
-              <HugeiconsIcon icon={Delete02Icon} size={11} strokeWidth={1.75} />
-            </button>
+            <HugeiconsIcon icon={Delete02Icon} size={11} strokeWidth={1.75} />
           </button>
-        ))}
+        </button>
+      ))}
     </div>
   );
 }
 
 function EmptyState({ onPick }: { onPick: (text: string) => void }) {
   return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-6 px-8 py-10 text-center">
-      <img src="/logo.png" alt="Terax" className="size-14 opacity-90" />
-      <div className="space-y-1.5">
-        <p className="text-[14px] font-semibold tracking-tight">
-          Ask Terax anything
-        </p>
-        <p className="max-w-[18rem] text-[11.5px] leading-relaxed text-muted-foreground">
-          Terax sees the active terminal — cwd, recent commands, and output.
-        </p>
-      </div>
-      <div className="flex w-full flex-col gap-2.5">
-        {SUGGESTIONS.map((s) => (
-          <button
-            key={s.label}
-            type="button"
-            onClick={() => onPick(s.text)}
-            className={cn(
-              "group flex items-center gap-2.5 bg-card/70 rounded-lg px-2.5 py-2 border border-border text-left",
-              "transition-colors hover:bg-muted/50 hover:text-foreground",
-            )}
-          >
-            <div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-muted/70 text-muted-foreground transition-colors group-hover:bg-foreground/5 group-hover:text-foreground">
-              <HugeiconsIcon icon={s.icon} size={13} strokeWidth={1.75} />
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="text-[12px] font-medium text-foreground">
-                {s.label}
+    <div className="flex flex-1 flex-col items-center px-8 py-6 text-center overflow-y-auto scrollbar-visible min-h-0 w-full">
+      <div className="my-auto flex flex-col items-center gap-6 w-full">
+        <img src="/logo.png" alt="Terax" className="size-14 opacity-90" />
+        <div className="space-y-1.5">
+          <p className="text-[14px] font-semibold tracking-tight">
+            Ask Terax anything
+          </p>
+          <p className="max-w-[18rem] text-[11.5px] leading-relaxed text-muted-foreground">
+            Terax sees the active terminal — cwd, recent commands, and output.
+          </p>
+        </div>
+        <div className="flex w-full flex-col gap-2.5">
+          {SUGGESTIONS.map((s) => (
+            <button
+              key={s.label}
+              type="button"
+              onClick={() => onPick(s.text)}
+              className={cn(
+                "group flex items-center gap-2.5 bg-card/70 rounded-lg px-2.5 py-2 border border-border text-left",
+                "transition-colors hover:bg-muted/50 hover:text-foreground",
+              )}
+            >
+              <div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-muted/70 text-muted-foreground transition-colors group-hover:bg-foreground/5 group-hover:text-foreground">
+                <HugeiconsIcon icon={s.icon} size={13} strokeWidth={1.75} />
               </div>
-              <div className="text-[10.5px] text-muted-foreground">
-                {s.hint}
+              <div className="min-w-0 flex-1">
+                <div className="text-[12px] font-medium text-foreground">
+                  {s.label}
+                </div>
+                <div className="text-[10.5px] text-muted-foreground">
+                  {s.hint}
+                </div>
               </div>
-            </div>
-          </button>
-        ))}
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );

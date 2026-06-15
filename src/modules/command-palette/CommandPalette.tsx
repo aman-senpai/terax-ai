@@ -322,9 +322,7 @@ export function CommandPalette({
                         className="text-[12.5px]"
                       >
                         <img
-                          src={fileIconUrl(
-                            hit.is_dir ? "" : basename(hit.rel),
-                          )}
+                          src={fileIconUrl(hit.is_dir ? "" : basename(hit.rel))}
                           alt=""
                           className="size-4 shrink-0"
                         />
@@ -446,7 +444,11 @@ function rankCommands(
   }
   const scored: { item: PaletteItem; s: number }[] = [];
   for (const item of items) {
-    const s = fuzzyBest(term, [item.title, item.group, ...(item.keywords ?? [])]);
+    const s = fuzzyBest(term, [
+      item.title,
+      item.group,
+      ...(item.keywords ?? []),
+    ]);
     if (s !== null) scored.push({ item, s });
   }
   scored.sort(
@@ -544,7 +546,9 @@ function StatusItem({
         />
       ) : null}
       <span
-        className={tone === "error" ? "text-destructive" : "text-muted-foreground"}
+        className={
+          tone === "error" ? "text-destructive" : "text-muted-foreground"
+        }
       >
         {label}
       </span>

@@ -87,7 +87,9 @@ export function useAiBootstrap(): {
   // into chatStore so the dropdown reflects what the user picked in Settings.
   const initPrefs = usePreferencesStore((s) => s.init);
   const prefDefaultModel = usePreferencesStore((s) => s.defaultModelId);
-  const prefDefaultThinkingLevel = usePreferencesStore((s) => s.defaultThinkingLevel);
+  const prefDefaultThinkingLevel = usePreferencesStore(
+    (s) => s.defaultThinkingLevel,
+  );
   useEffect(() => {
     void initPrefs();
   }, [initPrefs]);

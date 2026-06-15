@@ -21,17 +21,20 @@ Auto-executes (no approval).`,
             z.object({
               description: z
                 .string()
-                .describe("Short label shown while the subagent runs (e.g. 'Research auth patterns')"),
+                .describe(
+                  "Short label shown while the subagent runs (e.g. 'Research auth patterns')",
+                ),
               prompt: z
                 .string()
-                .describe("Self-contained instruction with all context. Include file paths, what to do, and where to put output."),
+                .describe(
+                  "Self-contained instruction with all context. Include file paths, what to do, and where to put output.",
+                ),
             }),
           )
           .describe("One or more tasks to run in parallel."),
       }),
       execute: async ({ tasks }) => {
-        const { apiKeys, selectedModelId } =
-          useChatStore.getState();
+        const { apiKeys, selectedModelId } = useChatStore.getState();
 
         if (tasks.length === 0) {
           return { results: [] };
@@ -47,7 +50,10 @@ Auto-executes (no approval).`,
             modelId: selectedModelId,
             toolContext: ctx,
           });
-          spawned.push({ jobId, desc: t.description || `Task ${spawned.length + 1}` });
+          spawned.push({
+            jobId,
+            desc: t.description || `Task ${spawned.length + 1}`,
+          });
           return jobId;
         });
 

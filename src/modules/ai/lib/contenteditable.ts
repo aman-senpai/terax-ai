@@ -17,11 +17,20 @@ export function editorToText(root: HTMLElement): string {
       parts.push(child.textContent ?? "");
     } else if (child instanceof HTMLElement && child.dataset.chip === "file") {
       parts.push(`[@${child.dataset.name ?? "file"}]`);
-    } else if (child instanceof HTMLElement && child.dataset.chip === "snippet") {
+    } else if (
+      child instanceof HTMLElement &&
+      child.dataset.chip === "snippet"
+    ) {
       parts.push(`[#${child.dataset.name ?? "snippet"}]`);
-    } else if (child instanceof HTMLElement && child.dataset.chip === "command") {
+    } else if (
+      child instanceof HTMLElement &&
+      child.dataset.chip === "command"
+    ) {
       parts.push(`[/${child.dataset.name ?? "cmd"}]`);
-    } else if (child instanceof HTMLElement && child.dataset.ghost !== undefined) {
+    } else if (
+      child instanceof HTMLElement &&
+      child.dataset.ghost !== undefined
+    ) {
       // Ghost text — skip entirely (not real content).
     } else if (child instanceof HTMLElement) {
       // Unknown element — fall back to text
@@ -43,7 +52,10 @@ export function textOffsetToDom(
     const len = nodeTextLen(child);
     if (remaining <= len) {
       if (child.nodeType === Node.TEXT_NODE) {
-        return { node: child, offset: Math.min(remaining, child.textContent?.length ?? 0) };
+        return {
+          node: child,
+          offset: Math.min(remaining, child.textContent?.length ?? 0),
+        };
       }
       // Chip element — place before it
       return { node: root, offset: Array.from(root.childNodes).indexOf(child) };
@@ -62,11 +74,23 @@ export function textOffsetToDom(
 }
 
 /** Map a DOM position to a character offset in plain text. */
-export function domToTextOffset(root: HTMLElement, node: Node, offset: number): number {
+export function domToTextOffset(
+  root: HTMLElement,
+  node: Node,
+  offset: number,
+): number {
   let pos = 0;
   for (const child of Array.from(root.childNodes)) {
     if (child === node) {
-      return pos + Math.min(offset, child.nodeType === Node.TEXT_NODE ? (child.textContent?.length ?? 0) : 0);
+      return (
+        pos +
+        Math.min(
+          offset,
+          child.nodeType === Node.TEXT_NODE
+            ? (child.textContent?.length ?? 0)
+            : 0,
+        )
+      );
     }
     pos += nodeTextLen(child);
   }

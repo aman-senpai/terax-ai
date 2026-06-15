@@ -2,7 +2,14 @@ import { Popover, PopoverAnchor } from "@/components/ui/popover";
 import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 import { usePresence } from "@/lib/usePresence";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useWorkspaceFiles } from "../hooks/useWorkspaceFiles";
 import { useComposer } from "../lib/composer";
 import { useChatAutocomplete } from "../lib/chatAutocomplete/useChatAutocomplete";
@@ -81,7 +88,8 @@ export function AiComposerInput() {
   const editorRef = useRef<HTMLDivElement | null>(null);
   // Keep composer's textareaRef pointed at our editor for focus / submit.
   useLayoutEffect(() => {
-    (c.textareaRef as React.MutableRefObject<HTMLDivElement | null>).current = editorRef.current;
+    (c.textareaRef as React.MutableRefObject<HTMLDivElement | null>).current =
+      editorRef.current;
   }, [editorRef]);
 
   const [trigger, setTrigger] = useState<SnippetTrigger | null>(null);
@@ -224,7 +232,12 @@ export function AiComposerInput() {
     let cursorAfter = trigger.end;
     if (item.kind === "snippet") {
       c.addSnippet(item.snippet);
-      cursorAfter = insertSnippetChip(el, trigger.start, trigger.end, item.snippet.handle);
+      cursorAfter = insertSnippetChip(
+        el,
+        trigger.start,
+        trigger.end,
+        item.snippet.handle,
+      );
     } else {
       c.addCommand(item.command);
       // For commands, insert [/name] inline text (chip-able later).
@@ -268,7 +281,12 @@ export function AiComposerInput() {
 
     const fileName = filePath.split("/").pop() || filePath;
     // Replace @query text with an inline file chip in the DOM.
-    const cursorAfter = insertFileChip(el, fileTrigger.start, fileTrigger.end, fileName);
+    const cursorAfter = insertFileChip(
+      el,
+      fileTrigger.start,
+      fileTrigger.end,
+      fileName,
+    );
     // Update React state from the DOM.
     syncing.current = true;
     c.setValue(editorToText(el));
@@ -316,8 +334,6 @@ export function AiComposerInput() {
   );
 
   const {
-    ghostText,
-    ghostPos,
     handleKeyDown: handleAutocompleteKey,
     trigger: triggerAutocomplete,
     cancelPending: cancelAutocomplete,
@@ -343,7 +359,8 @@ export function AiComposerInput() {
                 prev?.nodeType === Node.TEXT_NODE &&
                 next?.nodeType === Node.TEXT_NODE
               ) {
-                next.textContent = (prev.textContent ?? "") + (next.textContent ?? "");
+                next.textContent =
+                  (prev.textContent ?? "") + (next.textContent ?? "");
                 prev.remove();
               }
             }
@@ -372,7 +389,8 @@ export function AiComposerInput() {
               prev?.nodeType === Node.TEXT_NODE &&
               next?.nodeType === Node.TEXT_NODE
             ) {
-              next.textContent = (prev.textContent ?? "") + (next.textContent ?? "");
+              next.textContent =
+                (prev.textContent ?? "") + (next.textContent ?? "");
               prev.remove();
             }
           }
@@ -396,7 +414,7 @@ export function AiComposerInput() {
                 syncing.current = true;
                 const text = editorToText(el);
                 c.setValue(text);
-                triggerAutocomplete(text);
+                triggerAutocomplete(text, el);
                 updateTrigger();
               }}
               onClick={updateTrigger}
@@ -448,7 +466,9 @@ export function AiComposerInput() {
                         }
                       }
                       syncing.current = true;
-                      c.setValue(editorToText(el ?? document.createElement("div")));
+                      c.setValue(
+                        editorToText(el ?? document.createElement("div")),
+                      );
                       setFileTrigger(null);
                     } else {
                       setTrigger(null);
@@ -467,26 +487,17 @@ export function AiComposerInput() {
                 "whitespace-pre-wrap break-words overflow-y-auto pr-8",
               )}
             />
-            {/* State-driven placeholder — avoids browser :empty / <br> quirks */}
             {c.value === "" && !pickerOpen && (
               <span
-                className="pointer-events-none absolute left-0 top-0 text-[13px] leading-relaxed text-muted-foreground/60 select-none"
+                className="pointer-events-none absolute left-0 right-8 top-0 text-[13px] leading-relaxed text-muted-foreground/60 select-none truncate"
                 aria-hidden
               >
-                Ask Terax anything{"  "}—{"  "}# for snippets and commands, @ for files
+                Ask Terax anything — # for snippets, @ for files
               </span>
             )}
 
-            {/* Ghost text autocomplete overlay */}
-            {ghostText && ghostPos && (
-              <span
-                aria-hidden
-                className="pointer-events-none absolute text-[13px] leading-relaxed italic text-muted-foreground/45 select-none whitespace-pre-wrap break-words"
-                style={{ left: ghostPos.x, top: ghostPos.y }}
-              >
-                {ghostText}
-              </span>
-            )}
+            {/* Ghost text autocomplete overlay — rendered as [data-ghost] span
+                inside the contentEditable via useChatAutocomplete. */}
 
             {/* Top-right: send / stop */}
             {c.isBusy ? (
@@ -499,7 +510,11 @@ export function AiComposerInput() {
                 aria-label="Stop"
                 title="Stop"
               >
-                <HugeiconsIcon icon={StopCircleIcon} size={13} strokeWidth={1.75} />
+                <HugeiconsIcon
+                  icon={StopCircleIcon}
+                  size={13}
+                  strokeWidth={1.75}
+                />
               </Button>
             ) : (
               <Button
@@ -511,7 +526,11 @@ export function AiComposerInput() {
                 aria-label="Send"
                 title="Send (Enter)"
               >
-                <HugeiconsIcon icon={ArrowRight01Icon} size={13} strokeWidth={1.75} />
+                <HugeiconsIcon
+                  icon={ArrowRight01Icon}
+                  size={13}
+                  strokeWidth={1.75}
+                />
               </Button>
             )}
 
@@ -545,7 +564,11 @@ export function AiComposerInput() {
                 ) : c.voice.transcribing ? (
                   <Spinner className="size-3" />
                 ) : (
-                  <HugeiconsIcon icon={Mic01Icon} size={13} strokeWidth={1.75} />
+                  <HugeiconsIcon
+                    icon={Mic01Icon}
+                    size={13}
+                    strokeWidth={1.75}
+                  />
                 )}
               </Button>
             )}

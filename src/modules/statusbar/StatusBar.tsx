@@ -46,7 +46,10 @@ export function StatusBar({
                 <span>Private: hidden from AI</span>
               </span>
             </TooltipTrigger>
-            <TooltipContent side="top" className="max-w-64 text-[11px] leading-relaxed">
+            <TooltipContent
+              side="top"
+              className="max-w-64 text-[11px] leading-relaxed"
+            >
               AI can't see this terminal's output. Use it for secrets, SSH, or
               anything you don't want sent to the model.
             </TooltipContent>

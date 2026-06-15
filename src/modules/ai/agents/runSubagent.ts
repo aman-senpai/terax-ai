@@ -71,7 +71,9 @@ function nextJobId(): string {
 export function spawnSubagent(args: Omit<Args, "jobId">): string {
   const jobId = nextJobId();
   let resolve: () => void = () => {};
-  void new Promise<void>((r) => { resolve = r; });
+  void new Promise<void>((r) => {
+    resolve = r;
+  });
 
   const entry: JobEntry = {
     description: args.description,
@@ -102,32 +104,61 @@ const WAIT_TIMEOUT_MS = 120_000;
 
 export async function waitForSubagents(
   jobIds: string[],
-): Promise<(RunResult & { jobId: string; status: JobState; error?: string })[]> {
+): Promise<
+  (RunResult & { jobId: string; status: JobState; error?: string })[]
+> {
   const promises = jobIds.map((id) => {
     const entry = jobs.get(id);
     if (!entry) return Promise.resolve(null);
     if (entry.status !== "running") return Promise.resolve(null);
     return new Promise<void>((r) => {
       const orig = entry.resolve;
-      entry.resolve = () => { orig(); r(); };
+      entry.resolve = () => {
+        orig();
+        r();
+      };
     });
   });
 
   const timeout = new Promise<void>((r) => setTimeout(r, WAIT_TIMEOUT_MS));
   await Promise.race([Promise.all(promises), timeout]);
 
-  const results: (RunResult & { jobId: string; status: JobState; error?: string })[] = [];
+  const results: (RunResult & {
+    jobId: string;
+    status: JobState;
+    error?: string;
+  })[] = [];
   for (const id of jobIds) {
     const entry = jobs.get(id);
     if (!entry) {
-      results.push({ jobId: id, status: "error", error: `unknown job: ${id}`, summary: "", stepCount: 0, durationMs: 0 });
+      results.push({
+        jobId: id,
+        status: "error",
+        error: `unknown job: ${id}`,
+        summary: "",
+        stepCount: 0,
+        durationMs: 0,
+      });
       continue;
     }
     if (entry.status === "running") {
-      results.push({ jobId: id, status: "error", error: "timed out", description: entry.description, summary: "", stepCount: 0, durationMs: 0 });
+      results.push({
+        jobId: id,
+        status: "error",
+        error: "timed out",
+        description: entry.description,
+        summary: "",
+        stepCount: 0,
+        durationMs: 0,
+      });
       finishSubagent(id, "timed out");
     } else {
-      results.push({ jobId: id, status: entry.status, error: entry.error, ...(entry.result ?? { summary: "", stepCount: 0, durationMs: 0 }) });
+      results.push({
+        jobId: id,
+        status: entry.status,
+        error: entry.error,
+        ...(entry.result ?? { summary: "", stepCount: 0, durationMs: 0 }),
+      });
     }
     jobs.delete(id);
   }
@@ -161,7 +192,9 @@ function buildSubagentToolSet(
   let toolCallIdx = 0;
   for (const [name, t] of Object.entries(tools)) {
     const toolObj = t as Record<string, unknown>;
-    const originalExecute = toolObj.execute as ((args: unknown) => Promise<unknown>) | undefined;
+    const originalExecute = toolObj.execute as
+      | ((args: unknown) => Promise<unknown>)
+      | undefined;
     if (!originalExecute) continue;
     const isMutation = MUTATION_TOOLS.has(name);
 
@@ -175,15 +208,20 @@ function buildSubagentToolSet(
 
       if (permissionMode === "read-only") {
         if (isMutation) {
-          return { error: `Read-only mode: "${name}" is not allowed.`, denied: true };
+          return {
+            error: `Read-only mode: "${name}" is not allowed.`,
+            denied: true,
+          };
         }
         return originalExecute(args);
       }
 
       // default mode: require user approval.
-      const approved = await pushApprovalRequired(jobId, idx, name, args);
-      if (!approved) {
-        return { denied: true, message: "User denied this tool call." };
+      if (isMutation) {
+        const approved = await pushApprovalRequired(jobId, idx, name, args);
+        if (!approved) {
+          return { denied: true, message: "User denied this tool call." };
+        }
       }
       return originalExecute(args);
     };
@@ -221,7 +259,11 @@ async function runSubagent({
 
   // ── Thinking config (same as main agent) ────────────────────────────
   const thinkingLevel = useChatStore.getState().thinkingLevel;
-  const providerOptions = buildThinkingProviderOptions(provider, thinkingLevel, modelId);
+  const providerOptions = buildThinkingProviderOptions(
+    provider,
+    thinkingLevel,
+    modelId,
+  );
 
   // ── Permission mode ─────────────────────────────────────────────────
   const permissionMode = useChatStore.getState().permissionMode;

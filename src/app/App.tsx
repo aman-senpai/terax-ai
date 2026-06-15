@@ -22,10 +22,7 @@ import {
 } from "@/modules/ai";
 import { AiComposerProvider } from "@/modules/ai/lib/composer";
 import { native } from "@/modules/ai/lib/native";
-import {
-  CommandPalette,
-  createCommandItems,
-} from "@/modules/command-palette";
+import { CommandPalette, createCommandItems } from "@/modules/command-palette";
 import {
   NewEditorDialog,
   useEditorFileSync,
@@ -59,11 +56,7 @@ import {
 } from "@/modules/source-control";
 import { StatusBar } from "@/modules/statusbar";
 import type { PanelImperativeHandle } from "react-resizable-panels";
-import {
-  useTabs,
-  useWindowTitle,
-  useWorkspaceCwd,
-} from "@/modules/tabs";
+import { useTabs, useWindowTitle, useWorkspaceCwd } from "@/modules/tabs";
 import {
   clearFocusedTerminal,
   disposeSession,
@@ -96,6 +89,18 @@ import {
 import { WorkspaceSurface } from "./components/WorkspaceSurface";
 import { useTabCloseGuards } from "./hooks/useTabCloseGuards";
 import { useWorkspaceSwitcher } from "./hooks/useWorkspaceSwitcher";
+
+const RIGHT_PANEL_WIDTH_KEY = "terax.rightpanel.width";
+const DEFAULT_RIGHT_PANEL_WIDTH = "30%";
+
+function readRightPanelWidth(): string {
+  try {
+    const stored = window.localStorage.getItem(RIGHT_PANEL_WIDTH_KEY);
+    return stored || DEFAULT_RIGHT_PANEL_WIDTH;
+  } catch {
+    return DEFAULT_RIGHT_PANEL_WIDTH;
+  }
+}
 
 export default function App() {
   const {
@@ -246,7 +251,6 @@ export default function App() {
     toggleExplorerFocus,
   } = useSidebarPanel(explorerRef);
 
-
   const [newEditorOpen, setNewEditorOpen] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [paletteInitialMode, setPaletteInitialMode] = useState<
@@ -265,14 +269,40 @@ export default function App() {
   const toggleRightPanel = useChatStore((s) => s.toggleRightPanel);
 
   const rightPanelRef = useRef<PanelImperativeHandle | null>(null);
-  const RIGHT_PANEL_SIZE = "30%";
+  const rightPanelWidthRef = useRef(readRightPanelWidth());
+  const rightPanelWidthWriteTimerRef = useRef(0);
+
+  const persistRightPanelWidth = useCallback((next: string) => {
+    rightPanelWidthRef.current = next;
+    if (rightPanelWidthWriteTimerRef.current) {
+      window.clearTimeout(rightPanelWidthWriteTimerRef.current);
+    }
+    rightPanelWidthWriteTimerRef.current = window.setTimeout(() => {
+      rightPanelWidthWriteTimerRef.current = 0;
+      try {
+        window.localStorage.setItem(RIGHT_PANEL_WIDTH_KEY, next);
+      } catch {
+        // ignore
+      }
+    }, 200);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (rightPanelWidthWriteTimerRef.current) {
+        window.clearTimeout(rightPanelWidthWriteTimerRef.current);
+      }
+    };
+  }, []);
+
+  const closeRightPanel = useChatStore((s) => s.closeRightPanel);
 
   // Sync right panel collapse/expand with store state
   useEffect(() => {
     const p = rightPanelRef.current;
     if (!p) return;
     if (rightPanelOpen && p.getSize().asPercentage <= 0) {
-      p.resize(RIGHT_PANEL_SIZE);
+      p.resize(rightPanelWidthRef.current);
     } else if (!rightPanelOpen && p.getSize().asPercentage > 0) {
       p.collapse();
     }
@@ -576,7 +606,6 @@ export default function App() {
     },
     [newPreviewTab],
   );
-
 
   const splitActivePaneInActiveTab = useCallback(
     (dir: "row" | "col") => {
@@ -887,8 +916,9 @@ export default function App() {
 
   const handleNewTabInSpace = useCallback(
     (spaceId: string) => {
-      const root = useSpaces.getState().spaces.find((s) => s.id === spaceId)
-        ?.root;
+      const root = useSpaces
+        .getState()
+        .spaces.find((s) => s.id === spaceId)?.root;
       newTabInSpace(spaceId, root ?? undefined);
     },
     [newTabInSpace],
@@ -1060,7 +1090,10 @@ export default function App() {
                 }}
               >
                 <div className="flex h-full min-h-0 flex-col border-r border-border/60 bg-card">
-                  <div key={sidebarView} className="min-h-0 flex-1 terax-panel-in">
+                  <div
+                    key={sidebarView}
+                    className="min-h-0 flex-1 terax-panel-in"
+                  >
                     {sidebarView === "explorer" ? (
                       <FileExplorer
                         ref={explorerRef}
@@ -1138,9 +1171,21 @@ export default function App() {
                 panelRef={rightPanelRef}
                 collapsible
                 collapsedSize={0}
-                defaultSize="30%"
+                defaultSize={rightPanelWidthRef.current}
                 minSize="20%"
                 maxSize="50%"
+                onResize={(size) => {
+                  if (size.asPercentage > 0) {
+                    persistRightPanelWidth(`${size.asPercentage}%`);
+                    if (!rightPanelOpen) {
+                      openRightPanel();
+                    }
+                  } else {
+                    if (rightPanelOpen) {
+                      closeRightPanel();
+                    }
+                  }
+                }}
               >
                 {hasComposer ? <RightPanel /> : null}
               </ResizablePanel>
