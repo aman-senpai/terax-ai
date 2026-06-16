@@ -507,11 +507,7 @@ export function CsvPreviewPane({ path, visible, onSetView }: Props) {
                         key={ci}
                         scope="col"
                         className="sticky top-0 z-10 border-b border-r border-border/50 bg-muted/80 px-0 text-left font-semibold backdrop-blur"
-                        style={{
-                          height: HEADER_HEIGHT,
-                          color: colColor(ci),
-                          left: `calc(3.5rem + ${ci} * 8rem)`,
-                        }}
+                        style={{ height: HEADER_HEIGHT, color: colColor(ci) }}
                         // biome-ignore lint/a11y/noNoninteractiveElementToInteractiveRole: spreadsheet header
                         onDoubleClick={(e) => handleCellDoubleClick(e, true, 0, ci)}
                       >
@@ -596,11 +592,7 @@ export function CsvPreviewPane({ path, visible, onSetView }: Props) {
                             isSelected &&
                               "ring-1 ring-inset ring-primary/40 bg-primary/10",
                           )}
-                          style={{
-                            height: ROW_HEIGHT,
-                            color: colColor(ci),
-                            left: `calc(3.5rem + ${ci} * 8rem)`,
-                          }}
+                          style={{ height: ROW_HEIGHT, color: colColor(ci) }}
                           onClick={(e) => handleCellClick(e, ri, ci)}
                           onDoubleClick={(e) =>
                             handleCellDoubleClick(e, false, ri, ci)
