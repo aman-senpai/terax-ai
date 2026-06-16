@@ -477,7 +477,7 @@ export function CsvPreviewPane({ path, visible, onSetView }: Props) {
           tabIndex={-1}
         >
           <table
-            className="min-w-max border-separate border-spacing-0 text-[12px] leading-none select-none"
+            className="min-w-max border-collapse text-[12px] leading-none select-none"
             style={{ tableLayout: "fixed" }}
           >
             <colgroup>
@@ -489,14 +489,14 @@ export function CsvPreviewPane({ path, visible, onSetView }: Props) {
               ))}
             </colgroup>
 
-            {/* Sticky header — sticky on each <th> (not <thead>) for cross-browser support */}
+            {/* Sticky header */}
             {header && (
               <thead style={{ height: HEADER_HEIGHT }}>
                 <tr>
                   <th
                     scope="col"
-                    className="sticky top-0 left-0 z-20 border-b border-r border-border/50 bg-muted/80 px-2 text-right text-[10px] font-medium tabular-nums text-muted-foreground/50 backdrop-blur select-none"
-                    style={{ height: HEADER_HEIGHT }}
+                    className="sticky top-0 z-20 border-b border-r border-border/50 bg-muted/80 px-2 text-right text-[10px] font-medium tabular-nums text-muted-foreground/50 backdrop-blur select-none"
+                    style={{ height: HEADER_HEIGHT, minWidth: "3.5rem", width: "3.5rem" }}
                   />
                   {Array.from({ length: colCount }).map((_, ci) => {
                     const cell = header[ci] ?? "";
@@ -572,8 +572,8 @@ export function CsvPreviewPane({ path, visible, onSetView }: Props) {
                   >
                     {/* Row number */}
                     <td
-                      className="sticky left-0 z-10 border-b border-r border-border/30 bg-muted/30 px-2 text-right text-[10px] tabular-nums text-muted-foreground/40 select-none group-hover/row:bg-muted/50"
-                      style={{ height: ROW_HEIGHT }}
+                      className="border-b border-r border-border/30 bg-muted/30 px-2 text-right text-[10px] tabular-nums text-muted-foreground/40 select-none group-hover/row:bg-muted/50"
+                      style={{ height: ROW_HEIGHT, minWidth: "3.5rem", width: "3.5rem" }}
                     >
                       {ri + 1}
                     </td>
@@ -592,7 +592,7 @@ export function CsvPreviewPane({ path, visible, onSetView }: Props) {
                             isSelected &&
                               "ring-1 ring-inset ring-primary/40 bg-primary/10",
                           )}
-                          style={{ height: ROW_HEIGHT, color: colColor(ci) }}
+                          style={{ height: ROW_HEIGHT, color: colColor(ci), minWidth: "8rem" }}
                           onClick={(e) => handleCellClick(e, ri, ci)}
                           onDoubleClick={(e) =>
                             handleCellDoubleClick(e, false, ri, ci)
