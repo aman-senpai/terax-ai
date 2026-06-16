@@ -1,7 +1,10 @@
 import { streamText, stepCountIs } from "ai";
 import { resolveModel, selectSystemPrompt } from "../config";
 import { buildConfiguredLanguageModel } from "../lib/agent";
-import { buildThinkingProviderOptions, type ThinkingLevel } from "../lib/thinking";
+import {
+  buildThinkingProviderOptions,
+  type ThinkingLevel,
+} from "../lib/thinking";
 import type { ProviderKeys } from "../lib/keyring";
 import type { ToolContext } from "../tools/context";
 import { buildFsTools } from "../tools/fs";

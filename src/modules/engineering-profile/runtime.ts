@@ -70,8 +70,8 @@ export function classifyTask(taskText: string): Domain[] {
 export async function loadProfiles(
   projectRoot: string | null,
 ): Promise<LoadedProfiles> {
-  const user = (await storage.getProfile("user", null)) ??
-    makeBlankProfile("user", null);
+  const user =
+    (await storage.getProfile("user", null)) ?? makeBlankProfile("user", null);
   const project = projectRoot
     ? ((await storage.getProfile("project", projectRoot)) ??
       makeBlankProfile("project", projectRoot))
@@ -99,13 +99,23 @@ export async function loadProfileArtifacts(
   totalTokens: number;
 }> {
   if (!workspaceRoot) {
-    return { rootBody: "", includedSplits: [], truncated: false, totalTokens: 0 };
+    return {
+      rootBody: "",
+      includedSplits: [],
+      truncated: false,
+      totalTokens: 0,
+    };
   }
   const rootMdPath = `${workspaceRoot.replace(/\/$/, "")}/.terax/profile.md`;
   const rootJsonPath = `${workspaceRoot.replace(/\/$/, "")}/.terax/profile.json`;
   const rootBody = await readTextFile(rootMdPath);
   if (rootBody === null) {
-    return { rootBody: "", includedSplits: [], truncated: false, totalTokens: 0 };
+    return {
+      rootBody: "",
+      includedSplits: [],
+      truncated: false,
+      totalTokens: 0,
+    };
   }
   let splitPaths: string[] = [];
   try {
@@ -257,21 +267,30 @@ export async function explainPreference(
 ): Promise<PreferenceExplanation | null> {
   const { user, project } = await loadProfiles(projectRoot);
   const merged = mergeProfiles(user, project, Date.now());
-  const pref = merged.preferences.find((p) => p.id === preferenceId) ??
+  const pref =
+    merged.preferences.find((p) => p.id === preferenceId) ??
     user.preferences.find((p) => p.id === preferenceId) ??
     project?.preferences.find((p) => p.id === preferenceId) ??
     null;
   if (!pref) return null;
   const signals = await storage.loadSignals(pref.scope, pref.projectRoot);
   const relevant = signals.filter(
-    (s) => preferenceKey(s.category, s.preference) === preferenceKey(pref.category, pref.preference),
+    (s) =>
+      preferenceKey(s.category, s.preference) ===
+      preferenceKey(pref.category, pref.preference),
   );
-  const userPref = user.preferences.find(
-    (p) => preferenceKey(p.category, p.preference) === preferenceKey(pref.category, pref.preference),
-  ) ?? null;
-  const projectPref = project?.preferences.find(
-    (p) => preferenceKey(p.category, p.preference) === preferenceKey(pref.category, pref.preference),
-  ) ?? null;
+  const userPref =
+    user.preferences.find(
+      (p) =>
+        preferenceKey(p.category, p.preference) ===
+        preferenceKey(pref.category, pref.preference),
+    ) ?? null;
+  const projectPref =
+    project?.preferences.find(
+      (p) =>
+        preferenceKey(p.category, p.preference) ===
+        preferenceKey(pref.category, pref.preference),
+    ) ?? null;
   const { overridden } = resolveConflict(userPref, projectPref);
   const breakdown: Partial<Record<string, number>> = {};
   let totalWeight = 0;

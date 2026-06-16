@@ -50,6 +50,7 @@ function makeChat(sessionId: string): Chat<UIMessage> {
       const a = all.find((x) => x.id === activeId) ?? BUILTIN_AGENTS[0];
       return { name: a.name, instructions: a.instructions };
     },
+    getProjectRoot: () => useChatStore.getState().live.getProjectRoot(),
     getLive: () => {
       const live = useChatStore.getState().live;
       return {
@@ -88,14 +89,7 @@ function makeChat(sessionId: string): Chat<UIMessage> {
     onFinishMeta: (info) => {
       useChatStore.getState().patchAgentMeta({ hitStepCap: info.hitStepCap });
     },
-    onTurnFinish: () => {
-      const projectRoot = useChatStore.getState().live.getProjectRoot();
-      void import("@/modules/engineering-profile/autoRefine").then(
-        ({ maybeAutoRefine }) => {
-          void maybeAutoRefine({ projectRoot, scope: "user" });
-        },
-      );
-    },
+    onTurnFinish: () => {},
     onUsage: (delta) => {
       const cur = useChatStore.getState().agentMeta.tokens;
       useChatStore.getState().patchAgentMeta({

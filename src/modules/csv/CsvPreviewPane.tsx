@@ -1,13 +1,7 @@
 import { cn } from "@/lib/utils";
 import { currentWorkspaceEnv } from "@/modules/workspace";
 import { invoke } from "@tauri-apps/api/core";
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CsvViewToggle } from "./CsvViewToggle";
 
 // ---------------------------------------------------------------------------
@@ -260,7 +254,8 @@ export function CsvPreviewPane({ path, visible, onSetView }: Props) {
     const hasHeader = rows.length > 1;
     const header = hasHeader ? rows[0] : null;
     const dataRows = hasHeader ? rows.slice(1) : rows;
-    const colCount = rows.length > 0 ? Math.max(...rows.map((r) => r.length), 0) : 0;
+    const colCount =
+      rows.length > 0 ? Math.max(...rows.map((r) => r.length), 0) : 0;
     return { header, dataRows, colCount };
   }, [gridVersion]);
 
@@ -340,14 +335,26 @@ export function CsvPreviewPane({ path, visible, onSetView }: Props) {
       if (selection && !e.ctrlKey && !e.metaKey) {
         const { active } = selection;
         let { row, col } = active;
-        if (e.key === "ArrowRight") { col = Math.min(col + 1, colCount - 1); e.preventDefault(); }
-        else if (e.key === "ArrowLeft") { col = Math.max(col - 1, 0); e.preventDefault(); }
-        else if (e.key === "ArrowDown") { row = Math.min(row + 1, dataRows.length - 1); e.preventDefault(); }
-        else if (e.key === "ArrowUp") { row = Math.max(row - 1, 0); e.preventDefault(); }
-        else return;
+        if (e.key === "ArrowRight") {
+          col = Math.min(col + 1, colCount - 1);
+          e.preventDefault();
+        } else if (e.key === "ArrowLeft") {
+          col = Math.max(col - 1, 0);
+          e.preventDefault();
+        } else if (e.key === "ArrowDown") {
+          row = Math.min(row + 1, dataRows.length - 1);
+          e.preventDefault();
+        } else if (e.key === "ArrowUp") {
+          row = Math.max(row - 1, 0);
+          e.preventDefault();
+        } else return;
         const next: CellRef = { row, col };
         if (e.shiftKey) {
-          setSelection((prev) => prev ? { anchor: prev.anchor, active: next } : { anchor: next, active: next });
+          setSelection((prev) =>
+            prev
+              ? { anchor: prev.anchor, active: next }
+              : { anchor: next, active: next },
+          );
         } else {
           setSelection({ anchor: next, active: next });
         }
@@ -409,9 +416,9 @@ export function CsvPreviewPane({ path, visible, onSetView }: Props) {
 
   const totalDataRows = dataRows.length;
 
-
   const startIdx = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - OVERSCAN);
-  const visibleCount = Math.ceil((containerHeight - HEADER_HEIGHT) / ROW_HEIGHT) + OVERSCAN * 2;
+  const visibleCount =
+    Math.ceil((containerHeight - HEADER_HEIGHT) / ROW_HEIGHT) + OVERSCAN * 2;
   const endIdx = Math.min(totalDataRows, startIdx + visibleCount);
 
   const visibleRows = dataRows.slice(startIdx, endIdx);
@@ -439,7 +446,11 @@ export function CsvPreviewPane({ path, visible, onSetView }: Props) {
   return (
     <div className="relative flex h-full w-full flex-col overflow-hidden rounded-md border border-border/60 bg-background">
       {/* Toggle — always absolute top-right, matching raw-editor mode */}
-      <CsvViewToggle mode="spreadsheet" onChange={onSetView} stats={statsLabel} />
+      <CsvViewToggle
+        mode="spreadsheet"
+        onChange={onSetView}
+        stats={statsLabel}
+      />
 
       {/* Status states */}
       {status.kind === "loading" && (
@@ -447,7 +458,8 @@ export function CsvPreviewPane({ path, visible, onSetView }: Props) {
       )}
       {status.kind === "error" && (
         <p className="px-6 py-4 text-[12px] text-destructive">
-          Failed to read file: {(status as { kind: "error"; message: string }).message}
+          Failed to read file:{" "}
+          {(status as { kind: "error"; message: string }).message}
         </p>
       )}
       {status.kind === "binary" && (
@@ -457,7 +469,9 @@ export function CsvPreviewPane({ path, visible, onSetView }: Props) {
       )}
       {status.kind === "toolarge" && (
         <p className="px-6 py-4 text-[12px] text-muted-foreground">
-          File is {(status as { kind: "toolarge"; size: number; limit: number }).size} bytes; limit{" "}
+          File is{" "}
+          {(status as { kind: "toolarge"; size: number; limit: number }).size}{" "}
+          bytes; limit{" "}
           {(status as { kind: "toolarge"; size: number; limit: number }).limit}.
         </p>
       )}
@@ -496,11 +510,16 @@ export function CsvPreviewPane({ path, visible, onSetView }: Props) {
                   <th
                     scope="col"
                     className="sticky top-0 z-20 border-b border-r border-border/50 bg-muted/80 px-2 text-right text-[10px] font-medium tabular-nums text-muted-foreground/50 backdrop-blur select-none"
-                    style={{ height: HEADER_HEIGHT, minWidth: "3.5rem", width: "3.5rem" }}
+                    style={{
+                      height: HEADER_HEIGHT,
+                      minWidth: "3.5rem",
+                      width: "3.5rem",
+                    }}
                   />
                   {Array.from({ length: colCount }).map((_, ci) => {
                     const cell = header[ci] ?? "";
-                    const isEditing = editing?.row === -1 && editing?.col === ci;
+                    const isEditing =
+                      editing?.row === -1 && editing?.col === ci;
                     return (
                       // biome-ignore lint/suspicious/noArrayIndexKey: stable col index
                       <th
@@ -509,7 +528,9 @@ export function CsvPreviewPane({ path, visible, onSetView }: Props) {
                         className="sticky top-0 z-10 border-b border-r border-border/50 bg-muted/80 px-0 text-left font-semibold backdrop-blur"
                         style={{ height: HEADER_HEIGHT, color: colColor(ci) }}
                         // biome-ignore lint/a11y/noNoninteractiveElementToInteractiveRole: spreadsheet header
-                        onDoubleClick={(e) => handleCellDoubleClick(e, true, 0, ci)}
+                        onDoubleClick={(e) =>
+                          handleCellDoubleClick(e, true, 0, ci)
+                        }
                       >
                         {isEditing ? (
                           <input
@@ -525,7 +546,9 @@ export function CsvPreviewPane({ path, visible, onSetView }: Props) {
                                 cancelEdit();
                               }
                             }}
-                            onBlur={(e) => commitEdit(-1, ci, e.currentTarget.value)}
+                            onBlur={(e) =>
+                              commitEdit(-1, ci, e.currentTarget.value)
+                            }
                           />
                         ) : (
                           <span className="block truncate px-3">
@@ -573,7 +596,11 @@ export function CsvPreviewPane({ path, visible, onSetView }: Props) {
                     {/* Row number */}
                     <td
                       className="border-b border-r border-border/30 bg-muted/30 px-2 text-right text-[10px] tabular-nums text-muted-foreground/40 select-none group-hover/row:bg-muted/50"
-                      style={{ height: ROW_HEIGHT, minWidth: "3.5rem", width: "3.5rem" }}
+                      style={{
+                        height: ROW_HEIGHT,
+                        minWidth: "3.5rem",
+                        width: "3.5rem",
+                      }}
                     >
                       {ri + 1}
                     </td>
@@ -592,7 +619,11 @@ export function CsvPreviewPane({ path, visible, onSetView }: Props) {
                             isSelected &&
                               "ring-1 ring-inset ring-primary/40 bg-primary/10",
                           )}
-                          style={{ height: ROW_HEIGHT, color: colColor(ci), minWidth: "8rem" }}
+                          style={{
+                            height: ROW_HEIGHT,
+                            color: colColor(ci),
+                            minWidth: "8rem",
+                          }}
                           onClick={(e) => handleCellClick(e, ri, ci)}
                           onDoubleClick={(e) =>
                             handleCellDoubleClick(e, false, ri, ci)
@@ -612,9 +643,16 @@ export function CsvPreviewPane({ path, visible, onSetView }: Props) {
                                   e.preventDefault();
                                   commitEdit(ri, ci, e.currentTarget.value);
                                   // Move to next cell
-                                  const nextCol = ci + 1 < colCount ? ci + 1 : 0;
-                                  const nextRow = ci + 1 < colCount ? ri : Math.min(ri + 1, dataRows.length - 1);
-                                  setSelection({ anchor: { row: nextRow, col: nextCol }, active: { row: nextRow, col: nextCol } });
+                                  const nextCol =
+                                    ci + 1 < colCount ? ci + 1 : 0;
+                                  const nextRow =
+                                    ci + 1 < colCount
+                                      ? ri
+                                      : Math.min(ri + 1, dataRows.length - 1);
+                                  setSelection({
+                                    anchor: { row: nextRow, col: nextCol },
+                                    active: { row: nextRow, col: nextCol },
+                                  });
                                 } else if (e.key === "Escape") {
                                   cancelEdit();
                                 }

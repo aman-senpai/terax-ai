@@ -177,12 +177,14 @@ export type RefinementProvider =
   | "openai-compatible"
   | "lmstudio"
   | "mlx"
-  | "ollama"
-  | "heuristic";
+  | "ollama";
+
+import { type ThinkingLevel } from "@/modules/ai/lib/thinking";
 
 export type RefinementConfig = {
   provider: RefinementProvider;
   modelId: string;
+  thinkingLevel?: ThinkingLevel;
   minConfidence: number;
   maxAgeMs: number;
   decayHalfLifeMs: number;
@@ -204,8 +206,9 @@ export type RefinementConfig = {
 };
 
 export const DEFAULT_REFINEMENT_CONFIG: RefinementConfig = {
-  provider: "heuristic",
-  modelId: "engineering-profile-heuristic-v1",
+  provider: "openai",
+  modelId: "",
+  thinkingLevel: "off",
   minConfidence: 0.35,
   maxAgeMs: 180 * 24 * 60 * 60 * 1000,
   decayHalfLifeMs: 60 * 24 * 60 * 60 * 1000,
@@ -222,6 +225,8 @@ export type PreferenceCandidate = {
   preference: string;
   evidence: string;
   weight: number;
+  mergedPriorIds?: string[];
+  mappedSignalIds?: string[];
 };
 
 export type ExtractionResult = {

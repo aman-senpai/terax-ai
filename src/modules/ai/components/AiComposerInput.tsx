@@ -20,6 +20,8 @@ import {
   textOffsetToDom,
   insertFileChip,
   insertSnippetChip,
+  insertTextAtCaret,
+  sanitizeContentEditable,
 } from "../lib/contenteditable";
 import { SLASH_COMMANDS } from "../lib/slashCommands";
 import { useChatStore } from "../store/chatStore";
@@ -142,6 +144,7 @@ export function AiComposerInput() {
       }
     }
     syncing.current = false;
+    sanitizeContentEditable(el);
 
     autoresize(el);
   }, [c.value]);
@@ -170,6 +173,7 @@ export function AiComposerInput() {
       setFileTrigger(null);
       return;
     }
+    sanitizeContentEditable(el);
     const caret = getCaretOffset(el);
     const text = editorToText(el);
     // Keep c.value in sync (submit reads from it).
@@ -339,6 +343,38 @@ export function AiComposerInput() {
     cancelPending: cancelAutocomplete,
   } = useChatAutocomplete(editorRef, pickerOpen, handleAutocompleteAccept);
 
+  const handlePaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
+    const el = editorRef.current;
+    if (!el) return;
+    const cd = e.clipboardData;
+    if (!cd) return;
+
+    // Route file/image pastes to attachments (ChipsRow) — never insert rich/img into the editor DOM.
+    // This prevents hierarchy pollution and translucency artifacts inside the contenteditable.
+    if (cd.files && cd.files.length > 0) {
+      e.preventDefault();
+      void c.addFiles(cd.files);
+      requestAnimationFrame(() => {
+        if (editorRef.current) editorRef.current.focus();
+      });
+      return;
+    }
+
+    // Always paste as plain text only. Strip any HTML/RTF/other formats.
+    const plain = cd.getData("text/plain");
+    if (plain != null) {
+      e.preventDefault();
+      insertTextAtCaret(el, plain);
+      sanitizeContentEditable(el);
+      syncing.current = true;
+      const text = editorToText(el);
+      c.setValue(text);
+      triggerAutocomplete(text, el);
+      updateTrigger();
+    }
+    // If neither files nor plain text, do nothing (no rich content allowed).
+  };
+
   return (
     <>
       <ChipsRow
@@ -408,9 +444,11 @@ export function AiComposerInput() {
               ref={editorRef}
               contentEditable
               suppressContentEditableWarning
+              onPaste={handlePaste}
               onInput={() => {
                 const el = editorRef.current;
                 if (!el) return;
+                sanitizeContentEditable(el);
                 syncing.current = true;
                 const text = editorToText(el);
                 c.setValue(text);
@@ -420,7 +458,7 @@ export function AiComposerInput() {
               onClick={updateTrigger}
               onKeyUp={updateTrigger}
               onKeyDown={(e) => {
-                // Autocomplete ghost text takes priority (Tab accept, Esc dismiss).
+                // Autocomplete ghost text takes priority (Tab or Right arrow to accept, Esc to dismiss).
                 if (handleAutocompleteKey(e)) return;
                 if (pickerOpen) {
                   const items = fileTrigger ? filteredFiles : filteredItems;

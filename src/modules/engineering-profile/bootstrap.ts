@@ -29,10 +29,13 @@ export async function ensureBootstrap(workspaceRoot: string): Promise<boolean> {
   const existingMd = await readText(profileMdPath);
   const existingJson = await readText(profileJsonPath);
   if (existingMd === null) {
+    // Prevent any immediate fs:changed → notifyUserFileEdit echo loop on first creation.
+    try { (await import("./storage")).noteProfileSelfWrite?.(); } catch {}
     await writeFile(profileMdPath, renderInitialProfileMd(workspaceRoot));
   }
   if (existingJson === null) {
     const initial = makeEmptyProfile(workspaceRoot);
+    try { (await import("./storage")).noteProfileSelfWrite?.(); } catch {}
     await writeFile(profileJsonPath, JSON.stringify(initial, null, 2));
   }
   return true;
@@ -40,6 +43,17 @@ export async function ensureBootstrap(workspaceRoot: string): Promise<boolean> {
 
 export function bootstrapPath(workspaceRoot: string): string {
   return `${workspaceRoot.replace(/\/$/, "")}/.terax`;
+}
+
+export async function isBootstrapped(workspaceRoot: string): Promise<boolean> {
+  if (process.env.VITEST) return true;
+  const root = `${workspaceRoot.replace(/\/$/, "")}/.terax`;
+  try {
+    const res = await native.readFile(`${root}/profile.md`);
+    return res.kind === "text";
+  } catch {
+    return false;
+  }
 }
 
 async function ensureDir(path: string): Promise<void> {

@@ -10,12 +10,11 @@ import {
   renderContextPackageForPrompt,
 } from "@/modules/engineering-profile/runtime";
 import type { ContextPackage } from "@/modules/engineering-profile/runtime";
-import { ensureBootstrap } from "@/modules/engineering-profile/bootstrap";
 import { anchorProjectRoot } from "@/modules/engineering-profile/projectRoot";
 import { observeUserMessage } from "@/modules/engineering-profile/observer";
-import { maybeAutoRefine } from "@/modules/engineering-profile/autoRefine";
 import {
   startLearningAgent as startAgent,
+  setAgentProjectRoot,
   notifyChatTurnFinished as notifyTurnFinished,
 } from "@/modules/engineering-profile/learningAgent";
 
@@ -102,14 +101,13 @@ function lastUserTaskText(messages: UIMessage[]): string {
  * Skips text wrapped in <env> or <file> tags (those are system-injected,
  * not user-authored). Fire-and-forget; the chat run is not blocked.
  *
- * Triggers an LLM auto-refinement pass if any new signals were recorded.
+ * Signals notify the learning agent; refinement runs after the turn ends.
  */
 async function observeForProfile(
   messages: UIMessage[],
   projectRoot: string | null,
 ): Promise<void> {
   try {
-    let anyRecorded = false;
     for (const m of messages) {
       if (m.role !== "user") continue;
       const parts = m.parts as ReadonlyArray<{ type: string; text?: string }>;
@@ -117,15 +115,11 @@ async function observeForProfile(
         if (p.type !== "text" || !p.text) continue;
         const cleaned = stripInjectedBlocks(p.text);
         if (cleaned.trim().length < 4) continue;
-        const result = await observeUserMessage({
+        await observeUserMessage({
           text: cleaned,
           projectRoot,
         });
-        if (result.recorded.length > 0) anyRecorded = true;
       }
-    }
-    if (anyRecorded) {
-      void maybeAutoRefine({ projectRoot, scope: "user" });
     }
   } catch (err) {
     console.warn("[engineering-profile] observeForProfile failed:", err);
@@ -160,7 +154,7 @@ type Deps = {
    * from `getLive().workspaceRoot` which follows the active terminal's
    * cwd. Used as the anchor for the engineering profile directory so
    * navigating between subdirectories via `cd` does not relocate the
-   * `.terx/engineering-profile/` directory.
+   * `.terax/` profile directory.
    */
   getProjectRoot?: () => string | null;
   getLmstudioBaseURL?: () => string | undefined;
@@ -196,13 +190,14 @@ export function createContextAwareTransport(deps: Deps) {
     const liveRoot = live.workspaceRoot;
     const projectRoot =
       anchorProjectRoot(deps.getProjectRoot?.() ?? liveRoot) ?? liveRoot;
-    if (projectRoot && !bootstrappedProjects.has(projectRoot)) {
-      bootstrappedProjects.add(projectRoot);
-      void ensureBootstrap(projectRoot);
-      void startAgent(projectRoot);
+    if (projectRoot) {
+      setAgentProjectRoot(projectRoot);
+      if (!bootstrappedProjects.has(projectRoot)) {
+        bootstrappedProjects.add(projectRoot);
+        void startAgent(projectRoot);
+      }
     }
-    void observeForProfile(options.messages, projectRoot);
-    void notifyTurnFinished();
+    await observeForProfile(options.messages, projectRoot);
     const projectMemory = await readTeraxMd(live.workspaceRoot);
     const profileArtifacts = projectRoot
       ? await loadProfileArtifacts(projectRoot, 4000)
@@ -224,12 +219,17 @@ export function createContextAwareTransport(deps: Deps) {
     let messagesForRun = envBlock
       ? injectEnvIntoLastUser(options.messages, envBlock)
       : options.messages;
-    if (artifactsBlock) {
-      messagesForRun = injectEngineeringProfile(messagesForRun, artifactsBlock);
+    const profileInjection = artifactsBlock || profileBlock;
+    if (profileInjection) {
+      messagesForRun = injectEngineeringProfile(
+        messagesForRun,
+        profileInjection,
+      );
     }
-    if (profileBlock) {
-      messagesForRun = injectEngineeringProfile(messagesForRun, profileBlock);
-    }
+    const turnSnapshot: {
+      text: string;
+      toolCalls: { toolName: string; input: Record<string, unknown> }[];
+    } = { text: "", toolCalls: [] };
     const result = await runAgentStream({
       keys: deps.getKeys(),
       modelId: deps.getModelId(),
@@ -240,7 +240,20 @@ export function createContextAwareTransport(deps: Deps) {
       onUsage: deps.onUsage,
       onCompact: deps.onCompact,
       onFinishMeta: deps.onFinishMeta,
-      onTurnFinish: deps.onTurnFinish,
+      onStepFinishForProfile: (step) => {
+        if (step.text) turnSnapshot.text = `${turnSnapshot.text}\n${step.text}`;
+        turnSnapshot.toolCalls.push(...step.toolCalls);
+      },
+      onTurnFinish: () => {
+        deps.onTurnFinish?.();
+        notifyTurnFinished({
+          sessionId: `turn-${Date.now().toString(36)}`,
+          projectRoot,
+          text: turnSnapshot.text,
+          toolCalls: turnSnapshot.toolCalls,
+          timestamp: Date.now(),
+        });
+      },
       lmstudioBaseURL: deps.getLmstudioBaseURL?.(),
       lmstudioModelId: deps.getLmstudioModelId?.(),
       mlxBaseURL: deps.getMlxBaseURL?.(),
@@ -292,9 +305,7 @@ function injectEngineeringProfile(
       textIdx === -1
         ? [{ type: "text", text: block }, ...parts]
         : parts.map((p, idx) =>
-            idx === textIdx
-              ? { ...p, text: `${p.text ?? ""}\n\n${block}` }
-              : p,
+            idx === textIdx ? { ...p, text: `${p.text ?? ""}\n\n${block}` } : p,
           );
     const out = messages.slice();
     out[i] = { ...m, parts: nextParts } as UIMessage;

@@ -28,14 +28,46 @@ const RECURRING_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
 const RECURRING_THRESHOLD = 3;
 
 const CATEGORY_HINTS: Array<{ keywords: RegExp; category: Domain }> = [
-  { keywords: /\b(react|component|css|tailwind|frontend|ui|ux|design|figma|ts|tsx|jsx|html|dom|webgl|render|hook|state manager)\b/i, category: "frontend" },
-  { keywords: /\b(api|server|backend|sql|database|postgres|mysql|endpoint|route|graphql|grpc|redis|queue|worker|express|hono|fastapi)\b/i, category: "backend" },
-  { keywords: /\b(architect|microservice|monolith|module|domain|service|hexagonal|cqrs|event[- ]driven|system design|adr)\b/i, category: "architecture" },
-  { keywords: /\b(test|spec|vitest|jest|cypress|playwright|coverage|mock|integration test|unit test|e2e)\b/i, category: "testing" },
-  { keywords: /\b(readme|docs|changelog|comment|jsdoc|tsdoc|swagger|openapi|migration)\b/i, category: "documentation" },
-  { keywords: /\b(git|pr|merge|rebase|branch|ci|cd|pipeline|deploy|release|workflow|standup|ticket)\b/i, category: "workflow" },
-  { keywords: /\b(design|color|palette|typography|font|spacing|layout|grid|icon|brand|visual|motion)\b/i, category: "design" },
-  { keywords: /\b(accessibility|a11y|aria|wcag|usability|onboarding|empty state|microcopy|focus|keyboard)\b/i, category: "ux" },
+  {
+    keywords:
+      /\b(react|component|css|tailwind|frontend|ui|ux|design|figma|ts|tsx|jsx|html|dom|webgl|render|hook|state manager)\b/i,
+    category: "frontend",
+  },
+  {
+    keywords:
+      /\b(api|server|backend|sql|database|postgres|mysql|endpoint|route|graphql|grpc|redis|queue|worker|express|hono|fastapi)\b/i,
+    category: "backend",
+  },
+  {
+    keywords:
+      /\b(architect|microservice|monolith|module|domain|service|hexagonal|cqrs|event[- ]driven|system design|adr)\b/i,
+    category: "architecture",
+  },
+  {
+    keywords:
+      /\b(test|spec|vitest|jest|cypress|playwright|coverage|mock|integration test|unit test|e2e)\b/i,
+    category: "testing",
+  },
+  {
+    keywords:
+      /\b(readme|docs|changelog|comment|jsdoc|tsdoc|swagger|openapi|migration)\b/i,
+    category: "documentation",
+  },
+  {
+    keywords:
+      /\b(git|pr|merge|rebase|branch|ci|cd|pipeline|deploy|release|workflow|standup|ticket)\b/i,
+    category: "workflow",
+  },
+  {
+    keywords:
+      /\b(design|color|palette|typography|font|spacing|layout|grid|icon|brand|visual|motion)\b/i,
+    category: "design",
+  },
+  {
+    keywords:
+      /\b(accessibility|a11y|aria|wcag|usability|onboarding|empty state|microcopy|focus|keyboard)\b/i,
+    category: "ux",
+  },
 ];
 
 export type ObservationInput = {
@@ -98,7 +130,11 @@ export async function observeUserMessage(
     return { recorded, skipped };
   }
 
-  const recurring = await detectRecurring(text, input.projectRoot, input.timestamp);
+  const recurring = await detectRecurring(
+    text,
+    input.projectRoot,
+    input.timestamp,
+  );
   if (recurring) {
     const category = hintCategory(recurring);
     const result = await recordRecurringRequest(recurring, text.slice(0, 240), {
@@ -123,7 +159,10 @@ function isOneOff(text: string): boolean {
 
 function extractExplicitPreference(text: string): string | null {
   if (!PREFERENCE_PATTERNS.some((p) => p.test(text))) return null;
-  const sentences = text.split(/[.!?\n]+/).map((s) => s.trim()).filter(Boolean);
+  const sentences = text
+    .split(/[.!?\n]+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
   for (const s of sentences) {
     if (PREFERENCE_PATTERNS.some((p) => p.test(s)) && !isOneOff(s)) {
       return cleanSentence(s);
@@ -133,7 +172,9 @@ function extractExplicitPreference(text: string): string | null {
 }
 
 function extractRejectionSubject(text: string): string | null {
-  const m = text.match(/(?:don'?t|never|stop|i (?:told|asked) you (?:not )?to)\s+([a-z][\w .+/-]{2,60})/i);
+  const m = text.match(
+    /(?:don'?t|never|stop|i (?:told|asked) you (?:not )?to)\s+([a-z][\w .+/-]{2,60})/i,
+  );
   if (m?.[1]) return cleanSentence(m[1]);
   return null;
 }

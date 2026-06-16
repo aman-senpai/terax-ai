@@ -77,21 +77,20 @@ export function createCommandItems(
   const splitDisabled = !activeTab
     ? "No active tab"
     : activeTab.kind === "terminal"
-      ? (activeTab.blocks
-          ? "Blocks terminal cannot split"
-          : activePaneCount >= MAX_PANES_PER_TAB
-            ? "Pane limit"
-            : undefined)
+      ? activeTab.blocks
+        ? "Blocks terminal cannot split"
+        : activePaneCount >= MAX_PANES_PER_TAB
+          ? "Pane limit"
+          : undefined
       : activeTab.split
         ? "Tab already split"
         : undefined;
   const canClosePane = activeTab
-    ? (activeTab.kind === "terminal"
-        ? activePaneCount > 1
-        : !!activeTab.split)
+    ? activeTab.kind === "terminal"
+      ? activePaneCount > 1
+      : !!activeTab.split
     : false;
-  const closeDisabled =
-    onlyOneTab && !canClosePane ? "Last tab" : undefined;
+  const closeDisabled = onlyOneTab && !canClosePane ? "Last tab" : undefined;
 
   return [
     {

@@ -2,13 +2,12 @@ import { tool } from "ai";
 import { z } from "zod";
 import { useChatStore } from "@/modules/ai/store/chatStore";
 import { explainPreference } from "./runtime";
-import { getCachedConfig } from "./storage";
 import {
   getMergedProfile,
   getProfile,
   listProjectProfiles,
-  recordExplicitFeedback,
   recordRejectedChange,
+  recordSignal,
   refineUserProfile,
   refineProjectProfile,
   rollbackProfile,
@@ -17,18 +16,9 @@ import {
   showSignals,
 } from "./api";
 import { isDomain, type Domain } from "./types";
-import type { ExtractorDeps } from "./extraction";
 import type { ToolContext } from "@/modules/ai/tools/context";
-
-function chatDeps(): ExtractorDeps {
-  const chat = useChatStore.getState();
-  return {
-    getKeys: () => chat.apiKeys,
-    getModelId: () => chat.selectedModelId,
-    getLocalConfig: () => undefined,
-    getConfig: () => getCachedConfig(),
-  };
-}
+import { anchorProjectRoot } from "./projectRoot";
+import { makeExtractorDeps } from "./autoRefine";
 
 const dom = z.string().refine(isDomain, "must be a known domain");
 const sourceSchema = z.enum([
@@ -56,25 +46,34 @@ export function buildProfileTools(_ctx: ToolContext) {
           .string()
           .min(3)
           .max(280)
-          .describe("Concise, declarative preference (e.g. 'Prefer TypeScript')."),
+          .describe(
+            "Concise, declarative preference (e.g. 'Prefer TypeScript').",
+          ),
         evidence: z
           .string()
           .min(1)
-          .describe("Short quote or paraphrase of the user statement that motivated the signal."),
+          .describe(
+            "Short quote or paraphrase of the user statement that motivated the signal.",
+          ),
         source: sourceSchema.default("explicit-feedback"),
-        scope: z.enum(["user", "project"]).default("user"),
+        scope: z.enum(["user", "project"]).default("project"),
         weight: z.number().min(0.1).max(2).default(1).optional(),
       }),
       execute: async (input) => {
-        const projectRoot = input.scope === "project"
-          ? (useChatStore.getState().live.getProjectRoot() ??
-              useChatStore.getState().live.getWorkspaceRoot() ??
-              null)
-          : null;
-        const result = await recordExplicitFeedback(input.preference, input.evidence, {
+        const raw =
+          useChatStore.getState().live.getProjectRoot() ??
+          useChatStore.getState().live.getWorkspaceRoot() ??
+          null;
+        const projectRoot = anchorProjectRoot(raw) ?? raw;
+        const scope = input.scope === "project" && !projectRoot ? "user" : input.scope;
+        const result = await recordSignal({
+          source: input.source,
           category: input.category as Domain,
-          projectRoot,
+          preference: input.preference,
+          evidence: input.evidence,
           weight: input.weight ?? 1,
+          scope,
+          projectRoot: scope === "project" ? projectRoot : null,
         });
         return {
           ok: result.accepted,
@@ -93,13 +92,19 @@ export function buildProfileTools(_ctx: ToolContext) {
         evidence: z.string().min(1),
       }),
       execute: async (input) => {
-        const result = await recordRejectedChange(input.preference, input.evidence, {
-          category: input.category as Domain,
-          projectRoot:
-            useChatStore.getState().live.getProjectRoot() ??
-            useChatStore.getState().live.getWorkspaceRoot() ??
-            null,
-        });
+        const raw =
+          useChatStore.getState().live.getProjectRoot() ??
+          useChatStore.getState().live.getWorkspaceRoot() ??
+          null;
+        const projectRoot = anchorProjectRoot(raw) ?? raw;
+        const result = await recordRejectedChange(
+          input.preference,
+          input.evidence,
+          {
+            category: input.category as Domain,
+            projectRoot,
+          },
+        );
         return {
           ok: result.accepted,
           reason: result.reason,
@@ -112,23 +117,24 @@ export function buildProfileTools(_ctx: ToolContext) {
       description:
         "Run a profile refinement pass. Aggregates new signals into confidence-scored preferences, decays stale ones, resolves conflicts, and writes a new snapshot. Usually called automatically by the autonomous continuous-learning agent; you only need to call it explicitly when the user asks or to force a refresh mid-session.",
       inputSchema: z.object({
-        scope: z.enum(["user", "project"]).default("user"),
+        scope: z.enum(["user", "project"]).default("project"),
         note: z.string().max(120).optional(),
       }),
       execute: async (input) => {
-        const root =
-          input.scope === "project"
-            ? (useChatStore.getState().live.getProjectRoot() ??
-                useChatStore.getState().live.getWorkspaceRoot() ??
-                null)
-            : null;
-        const result = input.scope === "project" && root
-          ? await refineProjectProfile(chatDeps(), root, {
-              note: input.note ?? null,
-            })
-          : await refineUserProfile(chatDeps(), {
-              note: input.note ?? null,
-            });
+        const raw =
+          useChatStore.getState().live.getProjectRoot() ??
+          useChatStore.getState().live.getWorkspaceRoot() ??
+          null;
+        const root = anchorProjectRoot(raw) ?? raw;
+        const scope = input.scope === "project" && !root ? "user" : input.scope;
+        const result =
+          scope === "project" && root
+            ? await refineProjectProfile(makeExtractorDeps(), root, {
+                note: input.note ?? null,
+              })
+            : await refineUserProfile(makeExtractorDeps(), {
+                note: input.note ?? null,
+              });
         return {
           ok: true,
           added: result.added.length,
@@ -151,7 +157,8 @@ export function buildProfileTools(_ctx: ToolContext) {
         limit: z.number().int().min(1).max(50).default(20).optional(),
       }),
       execute: async (input) => {
-        const root = useChatStore.getState().live.getWorkspaceRoot() ?? null;
+        const raw = useChatStore.getState().live.getWorkspaceRoot() ?? null;
+        const root = anchorProjectRoot(raw) ?? raw;
         const profile =
           input.scope === "merged"
             ? await getMergedProfile(root)
@@ -162,7 +169,8 @@ export function buildProfileTools(_ctx: ToolContext) {
         const min = input.minConfidence ?? 0.4;
         const limit = input.limit ?? 20;
         let prefs = profile.preferences.filter((p) => p.confidence >= min);
-        if (input.domain) prefs = prefs.filter((p) => p.category === input.domain);
+        if (input.domain)
+          prefs = prefs.filter((p) => p.category === input.domain);
         prefs = prefs.slice(0, limit);
         return {
           scope: profile.scope,
@@ -187,10 +195,13 @@ export function buildProfileTools(_ctx: ToolContext) {
       description:
         "Explain why the agent believes a given preference exists. Returns the underlying evidence signals, when they were observed, and which source channels contributed. Use to answer 'why does the agent think this' questions from the user.",
       inputSchema: z.object({
-        preferenceId: z.string().describe("Preference id from get_profile output."),
+        preferenceId: z
+          .string()
+          .describe("Preference id from get_profile output."),
       }),
       execute: async (input) => {
-        const root = useChatStore.getState().live.getWorkspaceRoot() ?? null;
+        const raw = useChatStore.getState().live.getWorkspaceRoot() ?? null;
+        const root = anchorProjectRoot(raw) ?? raw;
         const exp = await explainPreference(input.preferenceId, root);
         if (!exp) return { found: false };
         return {
@@ -224,15 +235,18 @@ export function buildProfileTools(_ctx: ToolContext) {
       description:
         "List the refinement snapshots for a profile. Each snapshot is a point-in-time profile that can be diffed or rolled back to.",
       inputSchema: z.object({
-        scope: z.enum(["user", "project"]).default("user"),
+        scope: z.enum(["user", "project"]).default("project"),
         limit: z.number().int().min(1).max(50).default(10).optional(),
       }),
       execute: async (input) => {
-        const root =
-          input.scope === "project"
-            ? (useChatStore.getState().live.getWorkspaceRoot() ?? null)
-            : null;
-        const snapshots = await showProfileHistory(input.scope, root, input.limit ?? 10);
+        const raw = useChatStore.getState().live.getWorkspaceRoot() ?? null;
+        const root = anchorProjectRoot(raw) ?? raw;
+        const scope = input.scope === "project" && !root ? "user" : input.scope;
+        const snapshots = await showProfileHistory(
+          scope,
+          scope === "project" ? root : null,
+          input.limit ?? 10,
+        );
         return snapshots.map((s) => ({
           id: s.id,
           createdAt: s.createdAt,
@@ -249,15 +263,18 @@ export function buildProfileTools(_ctx: ToolContext) {
       description:
         "List recent preference signals (raw observations) for the current scope. Useful for auditing what has been observed and confirming a signal was recorded.",
       inputSchema: z.object({
-        scope: z.enum(["user", "project"]).default("user"),
+        scope: z.enum(["user", "project"]).default("project"),
         limit: z.number().int().min(1).max(200).default(50).optional(),
       }),
       execute: async (input) => {
-        const root =
-          input.scope === "project"
-            ? (useChatStore.getState().live.getWorkspaceRoot() ?? null)
-            : null;
-        const list = await showSignals(input.scope, root, input.limit ?? 50);
+        const raw = useChatStore.getState().live.getWorkspaceRoot() ?? null;
+        const root = anchorProjectRoot(raw) ?? raw;
+        const scope = input.scope === "project" && !root ? "user" : input.scope;
+        const list = await showSignals(
+          scope,
+          scope === "project" ? root : null,
+          input.limit ?? 50,
+        );
         return list.map((s) => ({
           id: s.id,
           timestamp: s.timestamp,
@@ -275,16 +292,21 @@ export function buildProfileTools(_ctx: ToolContext) {
       description:
         "Roll the profile back to a previous snapshot. Creates a new snapshot whose contents are the old state; never destroys history. Use only when the user explicitly asks to roll back.",
       inputSchema: z.object({
-        snapshotId: z.string().describe("Snapshot id from show_profile_history."),
-        scope: z.enum(["user", "project"]).default("user"),
+        snapshotId: z
+          .string()
+          .describe("Snapshot id from show_profile_history."),
+        scope: z.enum(["user", "project"]).default("project"),
       }),
       needsApproval: true,
       execute: async (input) => {
-        const root =
-          input.scope === "project"
-            ? (useChatStore.getState().live.getWorkspaceRoot() ?? null)
-            : null;
-        const result = await rollbackProfile(input.snapshotId, input.scope, root);
+        const raw = useChatStore.getState().live.getWorkspaceRoot() ?? null;
+        const root = anchorProjectRoot(raw) ?? raw;
+        const scope = input.scope === "project" && !root ? "user" : input.scope;
+        const result = await rollbackProfile(
+          input.snapshotId,
+          scope,
+          scope === "project" ? root : null,
+        );
         if (!result) return { ok: false, reason: "snapshot-not-found" };
         return {
           ok: true,
@@ -298,11 +320,10 @@ export function buildProfileTools(_ctx: ToolContext) {
 
     set_refinement_config: tool({
       description:
-        "Update the refinement model configuration. Allows switching between heuristic and LLM-based extraction, tuning confidence thresholds, and adjusting when domains are split into their own .terax/<domain>/profile.md subdirectory. Heuristic is the safe default; switch to a configured LLM provider for higher-quality preference extraction.",
+        "Update the refinement model configuration. Sets the LLM provider and model used for preference extraction, and tunes confidence thresholds and domain-split behavior. If no provider is explicitly set, the current chat model is used.",
       inputSchema: z.object({
         provider: z
           .enum([
-            "heuristic",
             "openai",
             "anthropic",
             "google",
@@ -313,7 +334,7 @@ export function buildProfileTools(_ctx: ToolContext) {
             "mlx",
             "ollama",
           ])
-          .default("heuristic"),
+          .optional(),
         modelId: z.string().optional(),
         minConfidence: z.number().min(0).max(1).optional(),
         decayHalfLifeDays: z.number().int().min(1).max(365).optional(),

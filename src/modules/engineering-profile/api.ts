@@ -1,5 +1,10 @@
 import { storage, getCachedConfig } from "./storage";
-import { refineProfile, rollbackTo, type RefineResult } from "./refinement";
+import {
+  mergeProfiles,
+  refineProfile,
+  rollbackTo,
+  type RefineResult,
+} from "./refinement";
 import {
   buildContextPackage,
   classifyTask,
@@ -11,8 +16,6 @@ import {
 } from "./runtime";
 import {
   DEFAULT_REFINEMENT_CONFIG,
-  type LoadedProfiles,
-  type Preference,
   type Profile,
   type ProfileSnapshot,
   type RefinementConfig,
@@ -59,38 +62,7 @@ export async function getMergedProfile(
   projectRoot: string | null,
 ): Promise<Profile> {
   const loaded = await loadProfiles(projectRoot);
-  return mergeInto(loaded);
-}
-
-function mergeInto(loaded: LoadedProfiles): Profile {
-  const now = Date.now();
-  if (!loaded.project) return loaded.user;
-  const merged = new Map<string, Preference>();
-  for (const up of loaded.user.preferences) {
-    merged.set(keyOf(up), { ...up });
-  }
-  for (const pp of loaded.project.preferences) {
-    const k = keyOf(pp);
-    const userPref = merged.get(k);
-    if (!userPref) {
-      merged.set(k, { ...pp });
-    } else {
-      merged.set(k, { ...pp, confidence: Math.max(userPref.confidence, pp.confidence) });
-    }
-  }
-  const list = Array.from(merged.values()).sort(
-    (a, b) => b.confidence - a.confidence,
-  );
-  return {
-    ...loaded.user,
-    projectRoot: loaded.project.projectRoot,
-    preferences: list,
-    generatedAt: now,
-  };
-}
-
-function keyOf(p: Preference): string {
-  return `${p.category}::${p.preference.toLowerCase()}`;
+  return mergeProfiles(loaded.user, loaded.project, Date.now());
 }
 
 function makeEmpty(scope: Scope, projectRoot: string | null): Profile {
@@ -165,7 +137,16 @@ export async function listProjectProfiles(): Promise<
 export async function getRefinementConfig(): Promise<RefinementConfig> {
   const stored = await storage.getConfig();
   if (!stored) return { ...DEFAULT_REFINEMENT_CONFIG };
-  return { ...DEFAULT_REFINEMENT_CONFIG, ...(stored as Partial<RefinementConfig>) };
+  const merged = {
+    ...DEFAULT_REFINEMENT_CONFIG,
+    ...(stored as Partial<RefinementConfig>),
+  };
+  // Normalize legacy "heuristic" provider to the default LLM provider.
+  if ((merged as any).provider === "heuristic") {
+    merged.provider = DEFAULT_REFINEMENT_CONFIG.provider;
+    merged.modelId = DEFAULT_REFINEMENT_CONFIG.modelId;
+  }
+  return merged;
 }
 
 export async function setRefinementConfig(
@@ -217,4 +198,4 @@ export function defaultDeps(): EngineeringProfileDeps {
   };
 }
 
-export const _internal = { keyOf, makeEmpty };
+export const _internal = { makeEmpty };

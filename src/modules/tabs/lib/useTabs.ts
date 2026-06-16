@@ -623,9 +623,7 @@ export function useTabs(initial?: Partial<TerminalTab>) {
   const newCsvTab = useCallback((path: string) => {
     let targetId: number | null = null;
     setTabs((curr) => {
-      const existing = curr.find(
-        (t) => t.kind === "csv" && t.path === path,
-      );
+      const existing = curr.find((t) => t.kind === "csv" && t.path === path);
       if (existing) {
         targetId = existing.id;
         return curr;
@@ -682,40 +680,34 @@ export function useTabs(initial?: Partial<TerminalTab>) {
     [],
   );
 
-  const setCsvView = useCallback(
-    (id: number, mode: "spreadsheet" | "raw") => {
-      setTabs((curr) =>
-        curr.map((t) => {
-          if (
-            t.id !== id ||
-            !isCsvPath((t as { path?: string }).path ?? "")
-          )
-            return t;
-          if (mode === "raw" && t.kind === "csv") {
-            return {
-              ...t,
-              kind: "editor" as const,
-              dirty: false,
-              preview: false,
-            };
-          }
-          if (mode === "spreadsheet" && t.kind === "editor") {
-            if (t.dirty) return t;
-            return {
-              id: t.id,
-              kind: "csv" as const,
-              spaceId: t.spaceId,
-              cold: t.cold,
-              title: t.title,
-              path: t.path,
-            } satisfies CsvTab;
-          }
+  const setCsvView = useCallback((id: number, mode: "spreadsheet" | "raw") => {
+    setTabs((curr) =>
+      curr.map((t) => {
+        if (t.id !== id || !isCsvPath((t as { path?: string }).path ?? ""))
           return t;
-        }),
-      );
-    },
-    [],
-  );
+        if (mode === "raw" && t.kind === "csv") {
+          return {
+            ...t,
+            kind: "editor" as const,
+            dirty: false,
+            preview: false,
+          };
+        }
+        if (mode === "spreadsheet" && t.kind === "editor") {
+          if (t.dirty) return t;
+          return {
+            id: t.id,
+            kind: "csv" as const,
+            spaceId: t.spaceId,
+            cold: t.cold,
+            title: t.title,
+            path: t.path,
+          } satisfies CsvTab;
+        }
+        return t;
+      }),
+    );
+  }, []);
 
   const openGitDiffTab = useCallback(
     (input: {
@@ -1107,25 +1099,28 @@ export function useTabs(initial?: Partial<TerminalTab>) {
     return closedTab;
   }, []);
 
-  const splitFileTab = useCallback((tabId: number, dir: SplitDir): number | null => {
-    let newLeafId: number | null = null;
-    setTabs((curr) =>
-      curr.map((t) => {
-        if (t.id !== tabId || t.kind === "terminal" || t.split) return t;
-        const leafId = nextIdRef.current++;
-        newLeafId = leafId;
-        return {
-          ...t,
-          split: {
-            dir,
-            terminalLeafId: leafId,
-            terminalCwd: (t as any).cwd,
-          },
-        };
-      }),
-    );
-    return newLeafId;
-  }, []);
+  const splitFileTab = useCallback(
+    (tabId: number, dir: SplitDir): number | null => {
+      let newLeafId: number | null = null;
+      setTabs((curr) =>
+        curr.map((t) => {
+          if (t.id !== tabId || t.kind === "terminal" || t.split) return t;
+          const leafId = nextIdRef.current++;
+          newLeafId = leafId;
+          return {
+            ...t,
+            split: {
+              dir,
+              terminalLeafId: leafId,
+              terminalCwd: (t as any).cwd,
+            },
+          };
+        }),
+      );
+      return newLeafId;
+    },
+    [],
+  );
 
   const resetWorkspace = useCallback((cwd?: string) => {
     const tabId = nextIdRef.current++;

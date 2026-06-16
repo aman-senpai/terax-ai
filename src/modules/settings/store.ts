@@ -16,6 +16,7 @@ import {
   DEFAULT_THINKING_LEVEL,
   type ThinkingLevel,
 } from "@/modules/ai/lib/thinking";
+import { type RefinementProvider } from "@/modules/engineering-profile/types";
 import type { KeyBinding, ShortcutId } from "@/modules/shortcuts/shortcuts";
 import { emit, listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { LazyStore } from "@tauri-apps/plugin-store";
@@ -98,6 +99,9 @@ export type Preferences = {
   subagentProvider: ProviderId;
   subagentModelId: string;
   subagentThinkingLevel: ThinkingLevel;
+  profileProvider: RefinementProvider;
+  profileModelId: string;
+  profileThinkingLevel: ThinkingLevel;
   lmstudioBaseURL: string;
   lmstudioModelId: string;
   mlxBaseURL: string;
@@ -149,6 +153,9 @@ const KEY_AUTOCOMPLETE_THINKING_LEVEL = "autocompleteThinkingLevel";
 const KEY_SUBAGENT_PROVIDER = "subagentProvider";
 const KEY_SUBAGENT_MODEL = "subagentModelId";
 const KEY_SUBAGENT_THINKING_LEVEL = "subagentThinkingLevel";
+const KEY_PROFILE_PROVIDER = "profileProvider";
+const KEY_PROFILE_MODEL = "profileModelId";
+const KEY_PROFILE_THINKING_LEVEL = "profileThinkingLevel";
 const KEY_LMSTUDIO_BASE_URL = "lmstudioBaseURL";
 const KEY_LMSTUDIO_MODEL_ID = "lmstudioModelId";
 const KEY_MLX_BASE_URL = "mlxBaseURL";
@@ -244,6 +251,9 @@ export const DEFAULT_PREFERENCES: Preferences = {
   subagentProvider: "openai",
   subagentModelId: DEFAULT_MODEL_ID,
   subagentThinkingLevel: "low",
+  profileProvider: "openai",
+  profileModelId: "",
+  profileThinkingLevel: "low",
   lmstudioBaseURL: LMSTUDIO_DEFAULT_BASE_URL,
   lmstudioModelId: "",
   mlxBaseURL: MLX_DEFAULT_BASE_URL,
@@ -343,11 +353,18 @@ export async function loadPreferences(): Promise<Preferences> {
       get<ProviderId>(KEY_SUBAGENT_PROVIDER) ??
       DEFAULT_PREFERENCES.subagentProvider,
     subagentModelId:
-      get<string>(KEY_SUBAGENT_MODEL) ??
-      DEFAULT_PREFERENCES.subagentModelId,
+      get<string>(KEY_SUBAGENT_MODEL) ?? DEFAULT_PREFERENCES.subagentModelId,
     subagentThinkingLevel:
       get<ThinkingLevel>(KEY_SUBAGENT_THINKING_LEVEL) ??
       DEFAULT_PREFERENCES.subagentThinkingLevel,
+    profileProvider:
+      get<RefinementProvider>(KEY_PROFILE_PROVIDER) ??
+      DEFAULT_PREFERENCES.profileProvider,
+    profileModelId:
+      get<string>(KEY_PROFILE_MODEL) ?? DEFAULT_PREFERENCES.profileModelId,
+    profileThinkingLevel:
+      get<ThinkingLevel>(KEY_PROFILE_THINKING_LEVEL) ??
+      DEFAULT_PREFERENCES.profileThinkingLevel,
     lmstudioBaseURL:
       get<string>(KEY_LMSTUDIO_BASE_URL) ?? DEFAULT_PREFERENCES.lmstudioBaseURL,
     lmstudioModelId:
@@ -521,9 +538,7 @@ export async function setAutocompleteThinkingLevel(
   await writePref(KEY_AUTOCOMPLETE_THINKING_LEVEL, value);
 }
 
-export async function setSubagentProvider(
-  value: ProviderId,
-): Promise<void> {
+export async function setSubagentProvider(value: ProviderId): Promise<void> {
   await writePref(KEY_SUBAGENT_PROVIDER, value);
 }
 
@@ -535,6 +550,22 @@ export async function setSubagentThinkingLevel(
   value: ThinkingLevel,
 ): Promise<void> {
   await writePref(KEY_SUBAGENT_THINKING_LEVEL, value);
+}
+
+export async function setProfileProvider(
+  value: RefinementProvider,
+): Promise<void> {
+  await writePref(KEY_PROFILE_PROVIDER, value);
+}
+
+export async function setProfileModelId(value: string): Promise<void> {
+  await writePref(KEY_PROFILE_MODEL, value);
+}
+
+export async function setProfileThinkingLevel(
+  value: ThinkingLevel,
+): Promise<void> {
+  await writePref(KEY_PROFILE_THINKING_LEVEL, value);
 }
 
 export async function setLmstudioBaseURL(value: string): Promise<void> {
@@ -714,6 +745,9 @@ export async function onPreferencesChange(
     [KEY_SUBAGENT_PROVIDER]: "subagentProvider",
     [KEY_SUBAGENT_MODEL]: "subagentModelId",
     [KEY_SUBAGENT_THINKING_LEVEL]: "subagentThinkingLevel",
+    [KEY_PROFILE_PROVIDER]: "profileProvider",
+    [KEY_PROFILE_MODEL]: "profileModelId",
+    [KEY_PROFILE_THINKING_LEVEL]: "profileThinkingLevel",
     [KEY_LMSTUDIO_BASE_URL]: "lmstudioBaseURL",
     [KEY_LMSTUDIO_MODEL_ID]: "lmstudioModelId",
     [KEY_MLX_BASE_URL]: "mlxBaseURL",

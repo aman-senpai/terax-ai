@@ -1,19 +1,23 @@
 import { z } from "zod";
-import { buildConfiguredLanguageModel, type LocalProviderConfig } from "@/modules/ai/lib/agent";
-import { DEFAULT_MODEL_ID } from "@/modules/ai/config";
-import type { ProviderKeys, CustomEndpointKeys } from "@/modules/ai/lib/keyring";
+import {
+  buildConfiguredLanguageModel,
+  type LocalProviderConfig,
+} from "@/modules/ai/lib/agent";
+import { DEFAULT_MODEL_ID, type ProviderId } from "@/modules/ai/config";
+import type {
+  ProviderKeys,
+  CustomEndpointKeys,
+} from "@/modules/ai/lib/keyring";
 import {
   isDomain,
-  DOMAIN_HINTS,
   type Domain,
   type ExtractionResult,
   type PreferenceCandidate,
   type RefinementConfig,
   type RefinementProvider,
   type Signal,
+  type Preference,
 } from "./types";
-import { normalizeText, preferenceKey, similarity } from "./confidence";
-import { SOURCE_WEIGHTS } from "./types";
 
 export type ExtractorDeps = {
   getKeys: () => ProviderKeys;
@@ -21,6 +25,7 @@ export type ExtractorDeps = {
   getLocalConfig?: () => LocalProviderConfig | undefined;
   getCustomEndpointKeys?: () => CustomEndpointKeys;
   getConfig: () => RefinementConfig;
+  getPriorPreferences?: () => ReadonlyArray<Preference>;
 };
 
 export type Extractor = (
@@ -33,46 +38,70 @@ const candidateSchema = z.object({
   preference: z.string().min(3).max(280),
   evidence: z.string().min(1),
   weight: z.number().min(0.1).max(2),
+  mergedPriorIds: z.array(z.string()).optional(),
+  mappedSignalIds: z.array(z.string()).optional(),
 });
 
 const extractionSchema = z.object({
   candidates: z.array(candidateSchema),
 });
 
-const EXTRACTION_SYSTEM = `You extract stable engineering, architecture, design, and workflow preferences from observed user signals.
+const EXTRACTION_SYSTEM = `You are the Engineering Profile Builder, a high-fidelity agent that analyzes observed user actions, chat history, and feedback to maintain a clean, structured, and non-redundant engineering profile.
 
-A "stable preference" is a long-term tendency, not a one-off request. Examples: "prefer TypeScript", "use feature-based folders", "keep code concise", "avoid Redux", "prefer server components". One-shot task instructions are NOT preferences and must be discarded.
+You are given:
+1. EXISTING ENGINEERING PREFERENCES: Previously learned rules, styles, or patterns. Each has an [ID].
+2. NEW OBSERVED SIGNALS: Raw hints, user feedback, or tool call patterns. Each has an [ID].
 
-For each candidate, return:
-- category: a short lowercase label (e.g. ${DOMAIN_HINTS.slice(0, 4).join(", ")}, ...). The system accepts any category string; do not restrict yourself to a fixed list.
-- preference: a concise, declarative sentence (no leading "User")
-- evidence: a 1-line quote or summary of the supporting signal
-- weight: 0.1 to 2.0, higher = stronger signal
+Your goal is to output a set of consolidated preferences (candidates). For each candidate:
+1. Category: a short lowercase category name (e.g., design, architecture, style, testing, workflow, frontend, backend).
+2. Preference: a concise, high-impact declarative guideline (e.g. "Prefer Biome over Prettier for linting", "Use feature-based folder structures"). Formulate the guideline in general terms, avoiding project-specific file names unless they represent a global stack choice. Never use filler phrases like "User prefers" or "The model should".
+3. Evidence: a one-line summary of the specific signals or feedback that supports this preference.
+4. Weight: a score between 0.1 and 2.0 based on how strongly the signals indicate this preference (explicit feedback = 1.5-2.0, repeated actions = 0.8-1.4, weak hint = 0.1-0.7).
+5. mergedPriorIds: A list of IDs of existing preferences that this candidate merges, consolidates, updates, or replaces. IMPORTANT: If this candidate is a modification or reinforcement of an existing preference, you must include its ID here so the system preserves its identity. If you are merging multiple existing preferences because they have the same intent, list all of their IDs.
+6. mappedSignalIds: A list of IDs of new signals that support or belong to this preference.
 
-If the input contains only one-off task instructions, return an empty list. Do not invent preferences.`;
+Strict Rules:
+- DO NOT duplicate intents: If multiple new signals or existing preferences represent the same core guideline, merge them into a *single* candidate, listing their respective IDs in 'mergedPriorIds' and 'mappedSignalIds'. The system will refine confidence on that one entry from the full aggregated evidence. Never output duplicate or near-duplicate candidates for the same rule.
+- Choose the single best canonical phrasing (clean, professional, no typos) as the "preference" value for the merged candidate.
+- Pick one stable category for the consolidated intent. Do not emit the same rule under different categories (e.g. general + writing + documentation + content) in this or prior outputs.
+- IGNORE META / OPERATIONAL: Never output a candidate about calling profile tools (refine_profile, record_preference_signal, get_profile, explain_preference, etc.), the learning agent, autonomous refinement, profile.md updates, or any agent instructions / workflow for the AI itself. These are not user engineering preferences.
+- Discard one-offs: Temporary bug fixes, specific task orders, or one-off edits are not stable preferences and must be ignored.
+- When signals or priors are rephrasings or reinforcements of a long-standing rule (e.g. repeated "I prefer ... STAR method for resume bullets"), always map every relevant prior ID and signal ID under exactly one candidate so confidence is refined on the canonical entry rather than creating or keeping duplicate entries.`;
 
 export const llmExtractor: Extractor = async (signals, deps) => {
   const config = deps.getConfig();
   if (signals.length === 0) {
     return { candidates: [], discarded: [], provider: config.provider };
   }
-  if (config.provider === "heuristic") {
-    return heuristicExtractor(signals, deps);
-  }
   const localConfig = deps.getLocalConfig?.();
+  const modelId = deps.getModelId?.() ?? DEFAULT_MODEL_ID;
   const model = await buildConfiguredLanguageModel(
-    deps.getModelId?.() ?? DEFAULT_MODEL_ID,
+    modelId,
     deps.getKeys(),
     localConfig,
   );
-  const prompt = renderSignalsForLLM(signals);
+  
+  const priors = deps.getPriorPreferences?.() ?? [];
+  const prompt = renderInputsForLLM(signals, priors);
+  
   try {
     const { generateObject } = await import("ai");
+    const { buildThinkingProviderOptions } = await import(
+      "@/modules/ai/lib/thinking"
+    );
+    const thinkingOptions = buildThinkingProviderOptions(
+      config.provider as ProviderId,
+      config.thinkingLevel ?? "off",
+      modelId,
+    );
     const { object } = await generateObject({
       model,
       system: EXTRACTION_SYSTEM,
       prompt,
       schema: extractionSchema,
+      ...(Object.keys(thinkingOptions).length > 0
+        ? { providerOptions: thinkingOptions }
+        : {}),
     });
     const candidates: PreferenceCandidate[] = [];
     const discarded: { text: string; reason: string }[] = [];
@@ -87,52 +116,18 @@ export const llmExtractor: Extractor = async (signals, deps) => {
         preference: c.preference.trim(),
         evidence: c.evidence.trim(),
         weight: clampWeight(c.weight),
+        mergedPriorIds: c.mergedPriorIds ?? [],
+        mappedSignalIds: c.mappedSignalIds ?? [],
       });
     }
     return { candidates, discarded, provider: config.provider };
   } catch (err) {
     console.warn(
-      "[engineering-profile] LLM extraction failed, falling back to heuristic:",
+      "[engineering-profile] LLM extraction failed:",
       err,
     );
-    return heuristicExtractor(signals, deps);
+    throw err;
   }
-};
-
-export const heuristicExtractor: Extractor = async (signals) => {
-  const seen = new Map<string, PreferenceCandidate>();
-  const discarded: { text: string; reason: string }[] = [];
-  for (const s of signals) {
-    if (looksLikeOneOff(s)) {
-      discarded.push({ text: s.preference, reason: "one-off" });
-      continue;
-    }
-    const key = preferenceKey(s.category, s.preference);
-    const prior = seen.get(key);
-    if (prior) {
-      prior.weight = Math.min(2, prior.weight + 0.2);
-    } else {
-      seen.set(key, {
-        category: s.category,
-        preference: s.preference,
-        evidence: s.evidence || s.preference,
-        weight: clampWeight(SOURCE_WEIGHTS[s.source] * s.weight),
-      });
-    }
-  }
-  for (const [k, v] of Array.from(seen.entries())) {
-    for (const [k2, v2] of seen.entries()) {
-      if (k === k2) continue;
-      if (v.category !== v2.category) continue;
-      if (similarity(v.preference, v2.preference) >= 0.85) {
-        if (v2.weight > v.weight) {
-          seen.delete(k);
-          break;
-        }
-      }
-    }
-  }
-  return { candidates: Array.from(seen.values()), discarded, provider: "heuristic" };
 };
 
 function clampWeight(w: number): number {
@@ -142,49 +137,58 @@ function clampWeight(w: number): number {
   return w;
 }
 
-function looksLikeOneOff(s: Signal): boolean {
-  const t = normalizeText(s.preference);
-  if (!t) return true;
-  if (/^(fix|add|update|rename|delete|change|implement|refactor|clean up) /i.test(t)) {
-    return true;
-  }
-  if (/\b(in this file|on this page|for this task|today|tmp|todo|hack)\b/i.test(t)) {
-    return true;
-  }
-  if (s.source === "rejected-change" && Math.abs(s.weight) < 0.01) return true;
-  return false;
-}
 
-function renderSignalsForLLM(signals: ReadonlyArray<Signal>): string {
+function renderInputsForLLM(
+  signals: ReadonlyArray<Signal>,
+  priors: ReadonlyArray<Preference>,
+): string {
   const lines: string[] = [];
-  for (const s of signals) {
-    lines.push(
-      `[${new Date(s.timestamp).toISOString()}] (${s.source}, ${s.category}) ${s.preference} — ${s.evidence}`,
-    );
+  
+  if (priors.length > 0) {
+    lines.push("### EXISTING ENGINEERING PREFERENCES");
+    lines.push("Below are the preferences currently recorded in the user's engineering profile. If any new signals reinforce or modify these, you must map them using their exact ID in 'mergedPriorIds'.");
+    for (const p of priors) {
+      lines.push(`- [ID: ${p.id}] [Category: ${p.category}] "${p.preference}" (Confidence: ${p.confidence.toFixed(2)})`);
+    }
+    lines.push("");
   }
+
+  lines.push("### NEW OBSERVED SIGNALS");
+  lines.push("Below are the raw observations, user feedback, and actions. You must identify if they represent stable preferences, and if they map to any existing preferences above. (Repeated identical signals are grouped for brevity but all their IDs are listed so you can map every one.)");
+  // Group *exact* repeats by the signal's own preference text (no fuzzy, no similarity on priors, just collation of the provided data so the LLM receives everything without a 300-line wall of near-identical text).
+  const groups = new Map<string, {ids: string[], sample: any}>();
+  for (const s of signals) {
+    const key = `${s.category}::${s.preference}`;
+    if (!groups.has(key)) groups.set(key, {ids: [], sample: s});
+    groups.get(key)!.ids.push(s.id);
+  }
+  for (const g of groups.values()) {
+    const s = g.sample;
+    const idList = g.ids.length <= 8 ? g.ids.join(", ") : g.ids.slice(0,5).join(", ") + ` ... (+${g.ids.length-5} more)`;
+    lines.push(`- [IDs: ${idList}] [Category: ${s.category}] [Source e.g. ${s.source}] Preference hint: "${s.preference}" | Example evidence: "${s.evidence}"  (total ${g.ids.length} signals with this exact hint)`);
+  }
+  
   return lines.join("\n");
 }
 
-export function pickExtractor(
-  config: RefinementConfig,
-): Extractor {
-  if (config.provider === "heuristic") return heuristicExtractor;
+export function pickExtractor(_config: RefinementConfig): Extractor {
   return llmExtractor;
 }
 
+const SUPPORTED_PROVIDERS: ReadonlySet<string> = new Set([
+  "openai",
+  "anthropic",
+  "google",
+  "groq",
+  "openrouter",
+  "openai-compatible",
+  "lmstudio",
+  "mlx",
+  "ollama",
+]);
+
 export function supportsProvider(p: RefinementProvider): boolean {
-  return (
-    p === "heuristic" ||
-    p === "openai" ||
-    p === "anthropic" ||
-    p === "google" ||
-    p === "groq" ||
-    p === "openrouter" ||
-    p === "openai-compatible" ||
-    p === "lmstudio" ||
-    p === "mlx" ||
-    p === "ollama"
-  );
+  return SUPPORTED_PROVIDERS.has(p);
 }
 
 export type { Signal };

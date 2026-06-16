@@ -1,8 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { refineProfileMock, appendSignalMock, signals } = vi.hoisted(() => {
+const {
+  refineProfileMock,
+  appendSignalMock,
+  recordTurnAcceptanceMock,
+  signals,
+} = vi.hoisted(() => {
   const signals: unknown[] = [];
   return {
+    recordTurnAcceptanceMock: vi.fn(async () => []),
     refineProfileMock: vi.fn(async () => ({
       profile: {
         id: "p1",
@@ -37,19 +43,49 @@ vi.mock("./refinement", () => ({
   generateDomainSummary: vi.fn(() => ""),
 }));
 
+vi.mock("./bootstrap", () => ({
+  ensureBootstrap: vi.fn(async () => true),
+  isBootstrapped: vi.fn(async () => true),
+  bootstrapPath: (root: string) => `${root}/.terax`,
+}));
+
 vi.mock("./storage", () => {
   let nextId = 0;
   return {
     storage: {
       appendSignal: appendSignalMock,
-      getProfile: vi.fn(async () => null),
+      getProfile: vi.fn(async () => ({
+        id: "p1",
+        scope: "project" as const,
+        projectRoot: "/test",
+        generatedAt: 0,
+        summary: "",
+        preferences: [
+          {
+            id: "pref-1",
+            category: "frontend",
+            preference: "Use TypeScript",
+            confidence: 0.9,
+            evidenceCount: 1,
+            firstObservedAt: 0,
+            lastObservedAt: 0,
+            signalIds: [],
+            supportingSources: [],
+            scope: "project" as const,
+            projectRoot: "/test",
+            pinned: false,
+            supersededBy: null,
+          },
+        ],
+        domains: {},
+      })),
       saveProfile: vi.fn(async () => {}),
       appendSnapshot: vi.fn(async () => {}),
       loadSnapshots: vi.fn(async () => []),
       loadSignals: vi.fn(async () => signals),
       getConfig: vi.fn(async () => ({
-        provider: "heuristic",
-        modelId: "test",
+        provider: "openai",
+        modelId: "gpt-5",
         minConfidence: 0.35,
         maxAgeMs: 100000,
         decayHalfLifeMs: 100000,
@@ -65,7 +101,7 @@ vi.mock("./storage", () => {
       writeHumanView: vi.fn(async () => {}),
     },
     getCachedConfig: () => ({
-      provider: "heuristic" as const,
+      provider: "openai" as const,
       modelId: "test",
       minConfidence: 0.35,
       maxAgeMs: 100000,
@@ -81,6 +117,17 @@ vi.mock("./storage", () => {
     newSignalId: () => `sig-test-${++nextId}`,
     newPreferenceId: () => `pref-test-${++nextId}`,
     newSnapshotId: () => `snap-test-${++nextId}`,
+  };
+});
+
+vi.mock("./feedbackLoop", async () => {
+  const actual =
+    await vi.importActual<typeof import("./feedbackLoop")>("./feedbackLoop");
+  return {
+    ...actual,
+    scoreAlignment: vi.fn(() => []),
+    emitAlignmentSignals: vi.fn(async () => []),
+    recordTurnAcceptance: recordTurnAcceptanceMock,
   };
 });
 
@@ -125,6 +172,7 @@ describe("LearningAgent — autonomous continuous learning", () => {
     signals.length = 0;
     refineProfileMock.mockClear();
     appendSignalMock.mockClear();
+    recordTurnAcceptanceMock.mockClear();
   });
   afterEach(() => {
     vi.useRealTimers();
@@ -173,6 +221,22 @@ describe("LearningAgent — autonomous continuous learning", () => {
       scope: "user",
     });
     expect(appendSignalMock).toHaveBeenCalled();
+  });
+
+  it("skips turn acceptance after a tool rejection in the same turn", async () => {
+    const { notifyToolRejection } = await import("./learningAgent");
+    startLearningAgent("/test");
+    notifySignalRecorded(makeSignal({ id: "s1" }));
+    notifyToolRejection("write_file", "user rejected");
+    notifyChatTurnFinished({
+      sessionId: "sess-1",
+      projectRoot: "/test",
+      text: "done",
+      toolCalls: [],
+      timestamp: Date.now(),
+    });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(recordTurnAcceptanceMock).not.toHaveBeenCalled();
   });
 
   it("runs multiple refinements across separate windows", async () => {

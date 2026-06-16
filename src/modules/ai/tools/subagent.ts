@@ -52,8 +52,8 @@ Auto-executes (no approval).`,
         const currentModel = isLocal
           ? (MODELS.find((m) => m.provider === provider) ?? fallback)
           : (MODELS.find((m) => m.provider === provider && m.id === modelId) ??
-             MODELS.find((m) => m.id === modelId) ??
-             fallback);
+            MODELS.find((m) => m.id === modelId) ??
+            fallback);
 
         const resolvedModelId = currentModel.id;
 

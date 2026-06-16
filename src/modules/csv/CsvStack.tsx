@@ -22,9 +22,7 @@ export function CsvStack({
   onCwd,
   onExit,
 }: Props) {
-  const csvTabs = tabs.filter(
-    (t): t is CsvTab => t.kind === "csv" && !t.cold,
-  );
+  const csvTabs = tabs.filter((t): t is CsvTab => t.kind === "csv" && !t.cold);
   if (csvTabs.length === 0) return null;
   return (
     <div className="relative h-full w-full">

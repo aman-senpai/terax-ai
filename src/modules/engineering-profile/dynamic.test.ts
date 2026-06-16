@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import { buildDomainProfiles } from "./refinement";
 import { DEFAULT_REFINEMENT_CONFIG, type Preference } from "./types";
 
-function pref(over: Partial<Preference> & { category: string; confidence?: number }): Preference {
+function pref(
+  over: Partial<Preference> & { category: string; confidence?: number },
+): Preference {
   return {
     id: over.id ?? `p-${Math.random().toString(36).slice(2)}`,
     category: over.category,
@@ -55,7 +57,13 @@ describe("buildDomainProfiles — split thresholds", () => {
     const prefs = Array.from({ length: 3 }, (_, i) =>
       pref({ id: `p${i}`, category: "design", confidence: 0.9 }),
     );
-    const domains = buildDomainProfiles(prefs, "", 0, DEFAULT_REFINEMENT_CONFIG, {});
+    const domains = buildDomainProfiles(
+      prefs,
+      "",
+      0,
+      DEFAULT_REFINEMENT_CONFIG,
+      {},
+    );
     expect(domains.design.split).toBe(false);
     expect(domains.design.splitPath).toBeNull();
   });
@@ -64,7 +72,13 @@ describe("buildDomainProfiles — split thresholds", () => {
     const prefs = Array.from({ length: 10 }, (_, i) =>
       pref({ id: `p${i}`, category: "design", confidence: 0.9 }),
     );
-    const domains = buildDomainProfiles(prefs, "", 0, DEFAULT_REFINEMENT_CONFIG, {});
+    const domains = buildDomainProfiles(
+      prefs,
+      "",
+      0,
+      DEFAULT_REFINEMENT_CONFIG,
+      {},
+    );
     expect(domains.design.split).toBe(true);
     expect(domains.design.splitPath).toBe(".terax/design/profile.md");
   });
@@ -73,16 +87,32 @@ describe("buildDomainProfiles — split thresholds", () => {
     const prefs = Array.from({ length: 10 }, (_, i) =>
       pref({ id: `p${i}`, category: "design", confidence: 0.3 }),
     );
-    const domains = buildDomainProfiles(prefs, "", 0, DEFAULT_REFINEMENT_CONFIG, {});
+    const domains = buildDomainProfiles(
+      prefs,
+      "",
+      0,
+      DEFAULT_REFINEMENT_CONFIG,
+      {},
+    );
     expect(domains.design.split).toBe(false);
   });
 
   it("does NOT split if domain share of total profile is too small", () => {
     const prefs = [
-      ...Array.from({ length: 6 }, (_, i) => pref({ id: `d${i}`, category: "design", confidence: 0.9 })),
-      ...Array.from({ length: 100 }, (_, i) => pref({ id: `o${i}`, category: "general", confidence: 0.9 })),
+      ...Array.from({ length: 6 }, (_, i) =>
+        pref({ id: `d${i}`, category: "design", confidence: 0.9 }),
+      ),
+      ...Array.from({ length: 100 }, (_, i) =>
+        pref({ id: `o${i}`, category: "general", confidence: 0.9 }),
+      ),
     ];
-    const domains = buildDomainProfiles(prefs, "", 0, DEFAULT_REFINEMENT_CONFIG, {});
+    const domains = buildDomainProfiles(
+      prefs,
+      "",
+      0,
+      DEFAULT_REFINEMENT_CONFIG,
+      {},
+    );
     expect(domains.design.split).toBe(false);
   });
 
@@ -100,7 +130,13 @@ describe("buildDomainProfiles — split thresholds", () => {
         splitPath: ".terax/design/profile.md",
       },
     };
-    const domains = buildDomainProfiles(prefs, "", 0, DEFAULT_REFINEMENT_CONFIG, prior);
+    const domains = buildDomainProfiles(
+      prefs,
+      "",
+      0,
+      DEFAULT_REFINEMENT_CONFIG,
+      prior,
+    );
     expect(domains.design.split).toBe(true);
     expect(domains.design.splitPath).toBe(".terax/design/profile.md");
   });
@@ -123,7 +159,13 @@ describe("buildDomainProfiles — split thresholds", () => {
     const prefs = Array.from({ length: 6 }, (_, i) =>
       pref({ id: `p${i}`, category: "Design System", confidence: 0.9 }),
     );
-    const domains = buildDomainProfiles(prefs, "", 0, DEFAULT_REFINEMENT_CONFIG, {});
+    const domains = buildDomainProfiles(
+      prefs,
+      "",
+      0,
+      DEFAULT_REFINEMENT_CONFIG,
+      {},
+    );
     expect(domains["Design System"].split).toBe(true);
     expect(domains["Design System"].splitPath).toBe(
       ".terax/design-system/profile.md",

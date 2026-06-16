@@ -1,19 +1,26 @@
 import {
   aggregateScore,
+  applyKlAnchor,
   clamp01,
   distinctSourceCount,
   normalizeConfidence,
   normalizeText,
+  // preferenceKey is used inside the exported buildFallbackCandidates helper (tested directly).
   preferenceKey,
-  similarity,
 } from "./confidence";
+import {
+  type Extractor,
+  type ExtractorDeps,
+  pickExtractor,
+} from "./extraction";
 import { makeBlankProfile, newPreferenceId, storage } from "./storage";
 import {
   DEFAULT_REFINEMENT_CONFIG,
-  normalizeDomain,
   type Domain,
   type DomainProfile,
+  normalizeDomain,
   type Preference,
+  type PreferenceCandidate,
   type Profile,
   type ProfileSnapshot,
   type RefinementConfig,
@@ -22,7 +29,6 @@ import {
   type SignalSource,
   type SnapshotChange,
 } from "./types";
-import { pickExtractor, type Extractor, type ExtractorDeps } from "./extraction";
 
 export type RefineOptions = {
   scope: Scope;
@@ -44,7 +50,7 @@ export type RefineResult = {
 /**
  * Core refinement pass:
  *  1. Load all signals for the scope.
- *  2. Run extraction (LLM or heuristic) to produce candidates.
+ *  2. Run LLM extraction to produce candidates.
  *  3. For each candidate, find or create a preference and re-score.
  *  4. Decay / demote / drop stale preferences.
  *  5. Resolve conflicts (project overrides user).
@@ -60,62 +66,211 @@ export async function refineProfile(
   const previous = await storage.getProfile(options.scope, options.projectRoot);
   const signals = await storage.loadSignals(options.scope, options.projectRoot);
   const extractor: Extractor = pickExtractor(config);
-  const extraction = await extractor(signals, deps);
+
+  let extraction: {
+    candidates: PreferenceCandidate[];
+    discarded?: unknown[];
+    provider?: string;
+  };
+  try {
+    extraction = await extractor(signals, {
+      ...deps,
+      getPriorPreferences: () => previous?.preferences ?? [],
+    });
+  } catch (err) {
+    console.warn(
+      "[engineering-profile] LLM extraction failed (no local fallback; priors will decay, signals re-presented to LLM on next refine):",
+      err,
+    );
+    extraction = { candidates: [], discarded: [], provider: config?.provider };
+  }
+
   const next = previous
     ? cloneProfile(previous, now)
     : makeBlankProfile(options.scope, options.projectRoot, now);
 
-  const all = new Map<string, Signal[]>();
-  for (const s of signals) {
-    const k = preferenceKey(s.category, s.preference);
-    let bucket = all.get(k);
-    if (!bucket) {
-      bucket = [];
-      all.set(k, bucket);
-    }
-    bucket.push(s);
-  }
+  // 1. Prior preferences - all deduplication, merging of intents, choice of canonical phrasing,
+  //    and category assignment MUST come from the LLM via mergedPriorIds / mappedSignalIds / candidate.
+  //    No local fuzzy, similarity, or key-based grouping is used for consolidation. The LLM decides.
+  const uniquePriors = [...next.preferences];
 
+  // 2. Preprocess extraction candidates. We trust the LLM output exclusively.
+  //    (If the LLM returned no candidates this pass, we still carry priors forward for decay + write.)
+  const candidatesWithMappings = extraction.candidates.map((candidate) => {
+    return {
+      ...candidate,
+      mergedPriorIds: candidate.mergedPriorIds
+        ? [...candidate.mergedPriorIds]
+        : [],
+      mappedSignalIds: candidate.mappedSignalIds
+        ? [...candidate.mappedSignalIds]
+        : [],
+    };
+  });
+
+  // 3. Process candidates and build nextPrefs
   const nextPrefs: Preference[] = [];
-  const newKeys = new Set<string>();
-  for (const [key, evSignals] of all) {
-    newKeys.add(key);
-    const prior = next.preferences.find((p) => preferenceKey(p.category, p.preference) === key);
-    const candidate = extraction.candidates.find(
-      (c) => preferenceKey(c.category, c.preference) === key,
+  const processedPriorIds = new Set<string>();
+
+  for (const cand of candidatesWithMappings) {
+    // Follow LLM-provided mergedPriorIds exactly (no text fuzzy or local key matching).
+    // The LLM is responsible for deciding which priors (even cross-category variants) represent
+    // the same intent and should be consolidated under this candidate so confidence is refined
+    // on a single entry from the full evidence.
+    const priors = uniquePriors.filter((p) =>
+      cand.mergedPriorIds.includes(p.id),
     );
-    const evidence = evSignals;
-    const rawScore = aggregateScore(evidence, now, config);
-    let confidence = normalizeConfidence(rawScore, evidence);
-    if (prior?.pinned) {
-      confidence = Math.max(prior.confidence, confidence);
+    const primaryPrior =
+      priors.find((p) => p.pinned) ??
+      priors.sort((a, b) => b.confidence - a.confidence)[0];
+
+    // Union *all* signals for this intent: the ones the LLM mapped in this candidate *plus*
+    // the historical signalIds from every prior the LLM told us to merge. This is what
+    // "refine the confidence score" on the consolidated point means.
+    const mergedSignalIds = Array.from(
+      new Set([
+        ...cand.mappedSignalIds,
+        ...priors.flatMap((p) => p.signalIds ?? []),
+      ]),
+    );
+    const allEvidenceForIntent = signals.filter((s) =>
+      mergedSignalIds.includes(s.id),
+    );
+
+    const existingPref = nextPrefs.find((p) =>
+      cand.mergedPriorIds.includes(p.id),
+    );
+
+    if (existingPref) {
+      existingPref.signalIds = Array.from(
+        new Set([...existingPref.signalIds, ...mergedSignalIds]),
+      );
+      existingPref.supportingSources = Array.from(
+        new Set([
+          ...existingPref.supportingSources,
+          ...collectSources(allEvidenceForIntent),
+        ]),
+      );
+      const rawScore = aggregateScore(allEvidenceForIntent, now, config);
+      let confidence =
+        allEvidenceForIntent.length > 0
+          ? normalizeConfidence(rawScore, allEvidenceForIntent)
+          : primaryPrior
+            ? primaryPrior.confidence
+            : existingPref.confidence;
+      if (primaryPrior?.pinned) {
+        confidence = Math.max(primaryPrior.confidence, confidence);
+      }
+      existingPref.confidence = anchorConfidence(
+        confidence,
+        existingPref.signalIds,
+        signals,
+        config,
+        existingPref.pinned,
+      );
+      existingPref.evidenceCount = allEvidenceForIntent.length;
+      if (allEvidenceForIntent.length > 0) {
+        existingPref.lastObservedAt = Math.max(
+          existingPref.lastObservedAt,
+          ...allEvidenceForIntent.map((s) => s.timestamp),
+        );
+        existingPref.firstObservedAt = Math.min(
+          existingPref.firstObservedAt,
+          ...allEvidenceForIntent.map((s) => s.timestamp),
+        );
+      }
+      if (primaryPrior?.pinned) {
+        existingPref.pinned = true;
+      }
+      for (const p of priors) {
+        processedPriorIds.add(p.id);
+      }
+      continue;
     }
-    if (prior && candidate && normalizeText(prior.preference) !== normalizeText(candidate.preference)) {
-      confidence = (confidence + prior.confidence) / 2;
+
+    const rawScore = aggregateScore(allEvidenceForIntent, now, config);
+    let confidence =
+      allEvidenceForIntent.length > 0
+        ? normalizeConfidence(rawScore, allEvidenceForIntent)
+        : primaryPrior
+          ? primaryPrior.confidence
+          : 0;
+
+    if (primaryPrior?.pinned) {
+      confidence = Math.max(primaryPrior.confidence, confidence);
     }
-    const sources = collectSources(evidence);
+    // No local normalizeText comparison / averaging. LLM chose the phrasing; confidence comes from full evidence.
+
+    const firstObserved =
+      allEvidenceForIntent.length > 0
+        ? Math.min(...allEvidenceForIntent.map((e) => e.timestamp))
+        : (primaryPrior?.firstObservedAt ?? now);
+    const lastObserved =
+      allEvidenceForIntent.length > 0
+        ? Math.max(...allEvidenceForIntent.map((e) => e.timestamp))
+        : (primaryPrior?.lastObservedAt ?? now);
+
     const pref: Preference = {
-      id: prior?.id ?? newPreferenceId(),
-      category: (candidate?.category ?? prior?.category ?? evidence[0]?.category ?? "general") as Domain,
-      preference: candidate?.preference ?? prior?.preference ?? evidence[0]?.preference,
-      confidence,
-      evidenceCount: evidence.length,
-      firstObservedAt:
-        prior?.firstObservedAt ??
-        Math.min(...evidence.map((e) => e.timestamp)),
-      lastObservedAt: Math.max(...evidence.map((e) => e.timestamp)),
-      signalIds: evidence.map((e) => e.id),
-      supportingSources: sources,
+      id: primaryPrior?.id ?? newPreferenceId(),
+      category: cand.category as Domain,
+      preference: cand.preference,
+      confidence: anchorConfidence(
+        confidence,
+        mergedSignalIds,
+        signals,
+        config,
+        primaryPrior?.pinned ?? false,
+      ),
+      evidenceCount: mergedSignalIds.length,
+      firstObservedAt: primaryPrior
+        ? Math.min(primaryPrior.firstObservedAt, firstObserved)
+        : firstObserved,
+      lastObservedAt: primaryPrior
+        ? Math.max(primaryPrior.lastObservedAt, lastObserved)
+        : lastObserved,
+      signalIds: mergedSignalIds,
+      supportingSources: Array.from(
+        new Set(collectSources(allEvidenceForIntent)),
+      ),
       scope: options.scope,
       projectRoot: options.projectRoot,
-      pinned: prior?.pinned ?? false,
+      pinned: primaryPrior?.pinned ?? false,
       supersededBy: null,
     };
     nextPrefs.push(pref);
+    for (const p of priors) {
+      processedPriorIds.add(p.id);
+    }
   }
 
-  const demoted = nextPrefs.filter((p) => p.confidence < config.demotionThreshold && !p.pinned);
-  const kept = nextPrefs.filter((p) => p.confidence >= config.demotionThreshold || p.pinned);
+  // 4. Decay unmapped priors
+  for (const prior of uniquePriors) {
+    if (processedPriorIds.has(prior.id)) continue;
+    let confidence = prior.confidence;
+    if (!prior.pinned) {
+      const halfLife = Math.max(config.decayHalfLifeMs, 1);
+      const age = Math.max(0, now - prior.lastObservedAt);
+      const decay = 0.5 ** (age / halfLife);
+      confidence = prior.confidence * decay;
+    }
+    nextPrefs.push({
+      ...prior,
+      confidence: anchorConfidence(
+        confidence,
+        prior.signalIds,
+        signals,
+        config,
+        prior.pinned,
+      ),
+    });
+  }
+
+  const demoted = nextPrefs.filter(
+    (p) => p.confidence < config.demotionThreshold && !p.pinned,
+  );
+  const kept = nextPrefs.filter(
+    (p) => p.confidence >= config.demotionThreshold || p.pinned,
+  );
   kept.sort((a, b) => b.confidence - a.confidence);
   const top = kept.slice(0, config.maxPreferences);
   const dropped: Preference[] = [
@@ -132,13 +287,7 @@ export async function refineProfile(
     generatedAt: now,
     preferences: top,
     summary: next.summary,
-    domains: buildDomainProfiles(
-      top,
-      next.summary,
-      now,
-      config,
-      next.domains,
-    ),
+    domains: buildDomainProfiles(top, next.summary, now, config, next.domains),
   };
   nextProfile.summary = nextProfile.summary || generateSummary(top, config);
 
@@ -167,9 +316,15 @@ export async function refineProfile(
   };
 }
 
-const addedChange = (c: SnapshotChange): c is SnapshotChange & { kind: "added" } => c.kind === "added";
-const removedChange = (c: SnapshotChange): c is SnapshotChange & { kind: "removed" } => c.kind === "removed";
-const modifiedChange = (c: SnapshotChange): c is SnapshotChange & { kind: "modified" } => c.kind === "modified";
+const addedChange = (
+  c: SnapshotChange,
+): c is SnapshotChange & { kind: "added" } => c.kind === "added";
+const removedChange = (
+  c: SnapshotChange,
+): c is SnapshotChange & { kind: "removed" } => c.kind === "removed";
+const modifiedChange = (
+  c: SnapshotChange,
+): c is SnapshotChange & { kind: "modified" } => c.kind === "modified";
 
 export async function rollbackTo(
   snapshotId: string,
@@ -219,12 +374,13 @@ export function diffChanges(
   next: ReadonlyArray<Preference>,
 ): SnapshotChange[] {
   const changes: SnapshotChange[] = [];
-  const prevByKey = new Map<string, Preference>();
-  const nextByKey = new Map<string, Preference>();
-  for (const p of prev) prevByKey.set(preferenceKey(p.category, p.preference), p);
-  for (const p of next) nextByKey.set(preferenceKey(p.category, p.preference), p);
-  for (const [k, n] of nextByKey) {
-    const before = prevByKey.get(k);
+  const prevById = new Map<string, Preference>();
+  const nextById = new Map<string, Preference>();
+  for (const p of prev) prevById.set(p.id, p);
+  for (const p of next) nextById.set(p.id, p);
+
+  for (const [id, n] of nextById) {
+    const before = prevById.get(id);
     if (!before) {
       changes.push({
         kind: "added",
@@ -260,8 +416,8 @@ export function diffChanges(
       }
     }
   }
-  for (const [k, b] of prevByKey) {
-    if (!nextByKey.has(k)) {
+  for (const [id, b] of prevById) {
+    if (!nextById.has(id)) {
       changes.push({
         kind: "removed",
         preferenceId: b.id,
@@ -325,7 +481,8 @@ function evaluateSplit(args: {
   config: RefinementConfig;
   priorSplit: boolean;
 }): boolean {
-  const { preferenceCount, averageConfidence, share, config, priorSplit } = args;
+  const { preferenceCount, averageConfidence, share, config, priorSplit } =
+    args;
   const meetsThresholds =
     preferenceCount >= config.splitMinPreferences &&
     averageConfidence >= config.splitMinAverageConfidence &&
@@ -361,15 +518,6 @@ export function resolveConflict(
 ): { effective: Preference | null; overridden: Preference | null } {
   if (!user) return { effective: project, overridden: null };
   if (!project) return { effective: user, overridden: null };
-  if (similarity(user.preference, project.preference) < 0.7) {
-    return { effective: project, overridden: user };
-  }
-  if (Math.abs(user.confidence - project.confidence) < 0.1) {
-    return { effective: project, overridden: user };
-  }
-  if (project.confidence > user.confidence) {
-    return { effective: project, overridden: user };
-  }
   return { effective: project, overridden: user };
 }
 
@@ -380,24 +528,34 @@ export function mergeProfiles(
 ): Profile {
   if (!project) return user;
   const merged: Preference[] = [];
-  const seen = new Set<string>();
+  const seenIds = new Set<string>();
+  // Exact normalized match only (no levenshtein similarity / fuzzy). LLM is the source of truth
+  // for intent consolidation; this is just last-resort safety for user vs project overlap.
+  const exactMatch = (a: string, b: string) =>
+    normalizeText(a) === normalizeText(b);
   for (const up of user.preferences) {
-    const k = preferenceKey(up.category, up.preference);
     const conflict = project.preferences.find(
-      (p) => preferenceKey(p.category, p.preference) === k,
+      (p) =>
+        p.category === up.category && exactMatch(p.preference, up.preference),
     );
-    const { effective, overridden } = resolveConflict(
-      up,
-      conflict ?? null,
-    );
+    const { effective, overridden } = resolveConflict(up, conflict ?? null);
     if (effective) {
       merged.push({ ...effective, supersededBy: overridden?.id ?? null });
-      seen.add(preferenceKey(effective.category, effective.preference));
+      seenIds.add(effective.id);
+      if (conflict && effective.id !== conflict.id) {
+        seenIds.add(conflict.id);
+      } else if (conflict) {
+        seenIds.add(up.id);
+      }
     }
   }
   for (const pp of project.preferences) {
-    const k = preferenceKey(pp.category, pp.preference);
-    if (seen.has(k)) continue;
+    if (seenIds.has(pp.id)) continue;
+    const duplicate = merged.find(
+      (m) =>
+        m.category === pp.category && exactMatch(m.preference, pp.preference),
+    );
+    if (duplicate) continue;
     merged.push(pp);
   }
   merged.sort((a, b) => b.confidence - a.confidence);
@@ -426,6 +584,53 @@ function collectSources(signals: ReadonlyArray<Signal>): SignalSource[] {
   const seen = new Set<SignalSource>();
   for (const s of signals) seen.add(s.source);
   return Array.from(seen);
+}
+
+/**
+ * Deterministic fallback when LLM extraction returns no usable mappings.
+ * Groups raw signals by preference text and wires signal IDs directly.
+ */
+export function buildFallbackCandidates(
+  signals: ReadonlyArray<Signal>,
+  priors: ReadonlyArray<Preference>,
+): PreferenceCandidate[] {
+  const groups = new Map<string, Signal[]>();
+  for (const s of signals) {
+    const key = preferenceKey(s.category, s.preference);
+    const bucket = groups.get(key) ?? [];
+    bucket.push(s);
+    groups.set(key, bucket);
+  }
+  const out: PreferenceCandidate[] = [];
+  for (const group of groups.values()) {
+    const first = group[0];
+    if (!first) continue;
+    const prior = priors.find(
+      (p) =>
+        preferenceKey(p.category, p.preference) ===
+        preferenceKey(first.category, first.preference),
+    );
+    out.push({
+      category: first.category,
+      preference: first.preference,
+      evidence: first.evidence,
+      weight: 1,
+      mergedPriorIds: prior ? [prior.id] : [],
+      mappedSignalIds: group.map((s) => s.id),
+    });
+  }
+  return out;
+}
+
+function anchorConfidence(
+  confidence: number,
+  signalIds: ReadonlyArray<string>,
+  allSignals: ReadonlyArray<Signal>,
+  config: RefinementConfig,
+  pinned: boolean,
+): number {
+  const evidence = allSignals.filter((s) => signalIds.includes(s.id));
+  return applyKlAnchor(confidence, evidence, config, pinned);
 }
 
 export const _internal = {

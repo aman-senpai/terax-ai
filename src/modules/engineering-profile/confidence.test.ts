@@ -1,12 +1,16 @@
 import { describe, expect, it } from "vitest";
 import {
   aggregateScore,
+  applyKlAnchor,
   clamp01,
   distinctSourceCount,
   logistic,
   normalizeConfidence,
   normalizeText,
   preferenceKey,
+  REINFORCEMENT_MIN_SIGNALS,
+  REWARD_ANCHOR_MAX,
+  REWARD_ANCHOR_MIN,
   similarity,
   totalWeight,
 } from "./confidence";
@@ -98,7 +102,9 @@ describe("normalizeConfidence", () => {
       sig({ id: "4", source: "design-critique", weight: 1 }),
       sig({ id: "5", source: "workflow-instruction", weight: 1 }),
     ];
-    const single: Signal[] = [sig({ id: "1", source: "explicit-feedback", weight: 1 })];
+    const single: Signal[] = [
+      sig({ id: "1", source: "explicit-feedback", weight: 1 }),
+    ];
     const scoreSingle = normalizeConfidence(
       aggregateScore(single, 0, config),
       single,
@@ -139,7 +145,9 @@ describe("preferenceKey", () => {
     );
   });
   it("differs across categories", () => {
-    expect(preferenceKey("frontend", "x")).not.toBe(preferenceKey("backend", "x"));
+    expect(preferenceKey("frontend", "x")).not.toBe(
+      preferenceKey("backend", "x"),
+    );
   });
 });
 
@@ -164,5 +172,40 @@ describe("similarity", () => {
   it("returns low for unrelated strings", () => {
     const s = similarity("PostgreSQL", "banana");
     expect(s).toBeLessThan(0.3);
+  });
+});
+
+describe("applyKlAnchor", () => {
+  it("floors confidence at minConfidence", () => {
+    const anchored = applyKlAnchor(0.1, [], DEFAULT_REFINEMENT_CONFIG, false);
+    expect(anchored).toBeGreaterThanOrEqual(
+      Math.max(REWARD_ANCHOR_MIN, DEFAULT_REFINEMENT_CONFIG.minConfidence),
+    );
+  });
+
+  it("caps confidence without enough reinforcement signals", () => {
+    const anchored = applyKlAnchor(
+      0.995,
+      [sig({ source: "accepted-change" })],
+      DEFAULT_REFINEMENT_CONFIG,
+      false,
+    );
+    expect(anchored).toBeLessThanOrEqual(REWARD_ANCHOR_MAX);
+    expect(anchored).toBe(REWARD_ANCHOR_MAX);
+  });
+
+  it("allows high confidence with enough reinforcement signals", () => {
+    const evidence = Array.from({ length: REINFORCEMENT_MIN_SIGNALS }, (_, i) =>
+      sig({
+        id: `s${i}`,
+        source: "explicit-feedback",
+      }),
+    );
+    const anchored = applyKlAnchor(0.995, evidence, DEFAULT_REFINEMENT_CONFIG, false);
+    expect(anchored).toBe(REWARD_ANCHOR_MAX);
+  });
+
+  it("does not modify pinned preferences", () => {
+    expect(applyKlAnchor(0.05, [], DEFAULT_REFINEMENT_CONFIG, true)).toBe(0.05);
   });
 });

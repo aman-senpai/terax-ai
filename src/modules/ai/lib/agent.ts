@@ -391,6 +391,16 @@ export type RunAgentOptions = {
    * after the turn completes.
    */
   onTurnFinish?: () => void;
+  /**
+   * Called for every step the agent takes. Receives the step's text
+   * (assistant prose) and tool calls. Used by the engineering profile
+   * feedback loop to score the agent's response against the active
+   * profile.
+   */
+  onStepFinishForProfile?: (step: {
+    text: string;
+    toolCalls: { toolName: string; input: Record<string, unknown> }[];
+  }) => void;
   lmstudioBaseURL?: string;
   lmstudioModelId?: string;
   mlxBaseURL?: string;
@@ -483,6 +493,15 @@ export async function runAgentStream(opts: RunAgentOptions) {
       : {}),
     onStepFinish: (step) => {
       stepsSeen++;
+      if (opts.onStepFinishForProfile) {
+        opts.onStepFinishForProfile({
+          text: typeof step.text === "string" ? step.text : "",
+          toolCalls: (step.toolCalls ?? []).map((tc) => ({
+            toolName: tc.toolName,
+            input: (tc.input ?? {}) as Record<string, unknown>,
+          })),
+        });
+      }
       if (opts.onStep) {
         const last = step.toolCalls?.[step.toolCalls.length - 1];
         if (last) {

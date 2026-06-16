@@ -26,32 +26,33 @@ export function GitDiffStack({
   );
   if (!active) return null;
 
-  const paneContent = active.kind === "git-diff" ? (
-    <GitDiffPane
-      key={active.id}
-      active
-      source={{
-        kind: "working",
-        repoRoot: active.repoRoot,
-        path: active.path,
-        mode: active.mode,
-        originalPath: active.originalPath,
-      }}
-    />
-  ) : (
-    <GitDiffPane
-      key={active.id}
-      active
-      source={{
-        kind: "commit",
-        repoRoot: active.repoRoot,
-        sha: active.sha,
-        path: active.path,
-        originalPath: active.originalPath,
-      }}
-      chipLabel={active.shortSha}
-    />
-  );
+  const paneContent =
+    active.kind === "git-diff" ? (
+      <GitDiffPane
+        key={active.id}
+        active
+        source={{
+          kind: "working",
+          repoRoot: active.repoRoot,
+          path: active.path,
+          mode: active.mode,
+          originalPath: active.originalPath,
+        }}
+      />
+    ) : (
+      <GitDiffPane
+        key={active.id}
+        active
+        source={{
+          kind: "commit",
+          repoRoot: active.repoRoot,
+          sha: active.sha,
+          path: active.path,
+          originalPath: active.originalPath,
+        }}
+        chipLabel={active.shortSha}
+      />
+    );
 
   return (
     <div className="h-full w-full">

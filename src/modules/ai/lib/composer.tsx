@@ -391,7 +391,7 @@ function readAsDataURL(file: Blob): Promise<string> {
 /**
  * Runs the passive observer against the user's submitted message. Records
  * any explicit preference patterns ("I prefer X", "always use Y", "stop
- * using Z") and triggers an auto-refinement pass if new signals landed.
+ * using Z"). Refinement is handled by the learning agent after the turn.
  *
  * Fire-and-forget. The user sees no UI change; the .terax/profile.md
  * file gets updated on the next refinement tick.
@@ -402,16 +402,10 @@ async function observeSubmittedMessage(
 ): Promise<void> {
   if (!text || text.trim().length < 4) return;
   try {
-    const result = await observeUserMessage({
+    await observeUserMessage({
       text,
       projectRoot,
     });
-    if (result.recorded.length > 0) {
-      const { maybeAutoRefine } = await import(
-        "@/modules/engineering-profile/autoRefine"
-      );
-      void maybeAutoRefine({ projectRoot });
-    }
   } catch (err) {
     console.warn("[engineering-profile] observation failed:", err);
   }

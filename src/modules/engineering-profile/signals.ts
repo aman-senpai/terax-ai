@@ -44,7 +44,7 @@ const PREFERENCE_MAX_LEN = 280;
  * refinement later aggregates into a confidence-scored preference.
  *
  * On the first project-scoped signal in a workspace, this also
- * bootstraps the .terx/engineering-profile/ directory structure.
+ * bootstraps the .terax/ directory structure.
  */
 export async function recordSignal(
   input: RecordSignalInput,
@@ -65,11 +65,8 @@ export async function recordSignal(
   const category: Domain = isDomain(input.category)
     ? input.category
     : "general";
-  const scope: Scope = input.scope ?? "user";
-  const projectRoot =
-    scope === "project"
-      ? (input.projectRoot ?? null)
-      : null;
+  const scope: Scope = input.scope ?? (input.projectRoot ? "project" : "user");
+  const projectRoot = scope === "project" ? (input.projectRoot ?? null) : null;
   const signal: Signal = {
     id: newSignalId(),
     timestamp: input.timestamp ?? Date.now(),
@@ -112,7 +109,11 @@ export async function recordSignals(
 export async function recordExplicitFeedback(
   preference: string,
   evidence: string,
-  opts?: { category?: Domain | string; projectRoot?: string | null; weight?: number },
+  opts?: {
+    category?: Domain | string;
+    projectRoot?: string | null;
+    weight?: number;
+  },
 ): Promise<RecordSignalResult> {
   return recordSignal({
     source: "explicit-feedback",
@@ -120,7 +121,7 @@ export async function recordExplicitFeedback(
     preference,
     evidence,
     weight: opts?.weight,
-    scope: "user",
+    scope: opts?.projectRoot ? "project" : "user",
     projectRoot: opts?.projectRoot ?? null,
   });
 }
@@ -135,7 +136,7 @@ export async function recordAcceptedChange(
     category: opts?.category ?? "general",
     preference,
     evidence,
-    scope: "user",
+    scope: opts?.projectRoot ? "project" : "user",
     projectRoot: opts?.projectRoot ?? null,
   });
 }
@@ -150,7 +151,7 @@ export async function recordRejectedChange(
     category: opts?.category ?? "general",
     preference,
     evidence,
-    scope: "user",
+    scope: opts?.projectRoot ? "project" : "user",
     projectRoot: opts?.projectRoot ?? null,
   });
 }
@@ -165,7 +166,7 @@ export async function recordUserModification(
     category: opts?.category ?? "general",
     preference,
     evidence,
-    scope: "user",
+    scope: opts?.projectRoot ? "project" : "user",
     projectRoot: opts?.projectRoot ?? null,
   });
 }
@@ -173,7 +174,11 @@ export async function recordUserModification(
 export async function recordRecurringRequest(
   preference: string,
   evidence: string,
-  opts?: { category?: Domain | string; projectRoot?: string | null; weight?: number },
+  opts?: {
+    category?: Domain | string;
+    projectRoot?: string | null;
+    weight?: number;
+  },
 ): Promise<RecordSignalResult> {
   return recordSignal({
     source: "recurring-request",
@@ -181,7 +186,7 @@ export async function recordRecurringRequest(
     preference,
     evidence,
     weight: opts?.weight ?? 0.7,
-    scope: "user",
+    scope: opts?.projectRoot ? "project" : "user",
     projectRoot: opts?.projectRoot ?? null,
   });
 }
@@ -211,7 +216,7 @@ export async function recordDesignCritique(
     category: opts?.category ?? "design",
     preference,
     evidence,
-    scope: "user",
+    scope: opts?.projectRoot ? "project" : "user",
     projectRoot: opts?.projectRoot ?? null,
   });
 }
@@ -226,7 +231,7 @@ export async function recordWorkflowInstruction(
     category: opts?.category ?? "workflow",
     preference,
     evidence,
-    scope: "user",
+    scope: opts?.projectRoot ? "project" : "user",
     projectRoot: opts?.projectRoot ?? null,
   });
 }
@@ -241,7 +246,7 @@ export async function recordConfigSetting(
     category: opts?.category ?? "general",
     preference,
     evidence,
-    scope: "user",
+    scope: opts?.projectRoot ? "project" : "user",
     projectRoot: opts?.projectRoot ?? null,
   });
 }

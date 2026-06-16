@@ -8,7 +8,9 @@ import {
   type RefinementConfig,
   type Signal,
   type SignalSource,
+  type Domain,
 } from "./types";
+
 
 const STORE_PATH = "terax-engineering-profile.json";
 
@@ -42,8 +44,22 @@ let fsMirrorDisabled = false;
 let fsMirrorWarned = false;
 let fsMirrorEnabled = false;
 
+// To prevent feedback loops where our own writes to .terax/profile.* (and splits/history)
+// trigger Rust fs watchers → listenFsChanged → handlePaths → notifyUserFileEdit → syncProfileFromDisk
+// which then writes again. We note the time of our writes; notifyUserFileEdit for profile paths
+// within a short window after a self-write will skip the sync.
+let lastProfileSelfWrite = 0;
+
+export function noteProfileSelfWrite(): void {
+  lastProfileSelfWrite = Date.now();
+}
+
+export function getLastProfileSelfWrite(): number {
+  return lastProfileSelfWrite;
+}
+
 async function ensureFsMirrorRoot(workspaceRoot: string): Promise<string> {
-  return `${workspaceRoot.replace(/\/$/, "")}/.terx/engineering-profile`;
+  return `${workspaceRoot.replace(/\/$/, "")}/.terax`;
 }
 
 function newId(prefix: string): string {
@@ -79,10 +95,16 @@ function projectSnapshotsKey(root: string): string {
 }
 
 type Stored = {
-  getProfile: (scope: "user" | "project", projectRoot: string | null) => Promise<Profile | null>;
+  getProfile: (
+    scope: "user" | "project",
+    projectRoot: string | null,
+  ) => Promise<Profile | null>;
   saveProfile: (profile: Profile) => Promise<void>;
   appendSignal: (signal: Signal) => Promise<void>;
-  loadSignals: (scope: "user" | "project", projectRoot: string | null) => Promise<Signal[]>;
+  loadSignals: (
+    scope: "user" | "project",
+    projectRoot: string | null,
+  ) => Promise<Signal[]>;
   appendSnapshot: (snapshot: ProfileSnapshot) => Promise<void>;
   loadSnapshots: (
     scope: "user" | "project",
@@ -105,9 +127,7 @@ export const storage: Stored = {
       return (await store.get<Profile>(KEY_USER_PROFILE)) ?? null;
     }
     if (!projectRoot) return null;
-    return (
-      (await store.get<Profile>(projectProfileKey(projectRoot))) ?? null
-    );
+    return (await store.get<Profile>(projectProfileKey(projectRoot))) ?? null;
   },
 
   async saveProfile(profile) {
@@ -116,8 +136,9 @@ export const storage: Stored = {
     } else if (profile.projectRoot) {
       await store.set(projectProfileKey(profile.projectRoot), profile);
       const map =
-        (await store.get<Record<string, Profile>>(KEY_PROJECT_PROFILE_BY_ROOT)) ??
-        {};
+        (await store.get<Record<string, Profile>>(
+          KEY_PROJECT_PROFILE_BY_ROOT,
+        )) ?? {};
       map[profile.projectRoot] = profile;
       await store.set(KEY_PROJECT_PROFILE_BY_ROOT, map);
     }
@@ -127,12 +148,8 @@ export const storage: Stored = {
       } catch (err) {
         if (!fsMirrorWarned) {
           fsMirrorWarned = true;
-          console.warn(
-            "[engineering-profile] human-view write disabled:",
-            err,
-          );
+          console.warn("[engineering-profile] human-view write failed:", err);
         }
-        fsMirrorDisabled = true;
       }
     }
   },
@@ -157,9 +174,7 @@ export const storage: Stored = {
       return (await store.get<Signal[]>(KEY_USER_SIGNALS)) ?? [];
     }
     if (!projectRoot) return [];
-    return (
-      (await store.get<Signal[]>(projectSignalsKey(projectRoot))) ?? []
-    );
+    return (await store.get<Signal[]>(projectSignalsKey(projectRoot))) ?? [];
   },
 
   async appendSnapshot(snapshot) {
@@ -202,10 +217,16 @@ export const storage: Stored = {
     if (configCache) return configCache;
     if (configLoadPromise) return configLoadPromise;
     configLoadPromise = (async () => {
-      const stored = (await store.get<Partial<RefinementConfig>>(KEY_CONFIG)) ?? null;
+      const stored =
+        (await store.get<Partial<RefinementConfig>>(KEY_CONFIG)) ?? null;
       const cfg = stored
         ? { ...DEFAULT_REFINEMENT_CONFIG, ...stored }
         : { ...DEFAULT_REFINEMENT_CONFIG };
+      // Normalize legacy "heuristic" provider.
+      if ((cfg as any).provider === "heuristic") {
+        cfg.provider = DEFAULT_REFINEMENT_CONFIG.provider;
+        cfg.modelId = DEFAULT_REFINEMENT_CONFIG.modelId;
+      }
       configCache = cfg;
       configLoadPromise = null;
       return cfg;
@@ -214,7 +235,10 @@ export const storage: Stored = {
   },
 
   async saveConfig(config) {
-    const cfg = { ...DEFAULT_REFINEMENT_CONFIG, ...(config as Partial<RefinementConfig>) };
+    const cfg = {
+      ...DEFAULT_REFINEMENT_CONFIG,
+      ...(config as Partial<RefinementConfig>),
+    };
     configCache = cfg;
     await store.set(KEY_CONFIG, cfg);
   },
@@ -232,23 +256,79 @@ export const storage: Stored = {
 };
 
 async function writeHumanViewImpl(profile: Profile): Promise<void> {
-  if (profile.scope === "user") return;
+  if (profile.scope === "user" || fsMirrorDisabled) return;
   const workspaceRoot = profile.projectRoot;
   if (!workspaceRoot) return;
+
+  // Note self-write *before* any native writes so that the fs:changed events
+  // we inevitably emit won't cause a re-entrant syncProfileFromDisk (which would
+  // otherwise rewrite json/md and keep the loop going).
+  noteProfileSelfWrite();
+
+  let diskProfile = profile;
+  if (profile.scope === "project") {
+    const user = await storage.getProfile("user", null);
+    if (user && user.preferences.length > 0) {
+      const { mergeProfiles } = await import("./refinement");
+      diskProfile = mergeProfiles(user, profile, profile.generatedAt);
+      diskProfile = {
+        ...diskProfile,
+        scope: "project",
+        projectRoot: workspaceRoot,
+        id: profile.id,
+      };
+    }
+  }
+
+  // Avoid rewriting the on-disk profile artifacts (json/md + splits + history) on
+  // every reinforce/turn when the user-visible content hasn't changed. This is
+  // the main cause of continuous modification to profile.json and the resulting
+  // editor flicker/reloads when the file is open (via fs:file-written + useEditorFileSync
+  // + fs:changed listeners). We still always update the internal store and append
+  // snapshots for history/audit.
+  const jsonPath = `${workspaceRoot.replace(/\/$/, "")}/.terax/profile.json`;
+  try {
+    const onDiskRes = await native.readFile(jsonPath);
+    if (onDiskRes.kind === "text") {
+      const old = JSON.parse(onDiskRes.content) as Profile;
+      const renderable = (p: Preference) => ({
+        category: p.category,
+        preference: p.preference,
+        confidence: Number(p.confidence.toFixed(2)), // as rendered
+        pinned: !!p.pinned,
+      });
+      const oldR = (old.preferences || []).map(renderable);
+      const newR = (diskProfile.preferences || []).map(renderable);
+      if (JSON.stringify(oldR) === JSON.stringify(newR)) {
+        // No visible change to the profile the user/agent sees. Skip mirror write.
+        // (splits and history writes are also inside the function below, so return early)
+        return;
+      }
+    }
+  } catch {
+    // No on-disk or parse error -> proceed to (re)write
+  }
+
   if (!fsMirrorEnabled) {
     try {
       await ensureDir(workspaceRoot);
       fsMirrorEnabled = true;
-    } catch {
-      fsMirrorDisabled = true;
+    } catch (err) {
+      if (!fsMirrorWarned) {
+        fsMirrorWarned = true;
+        console.warn("[engineering-profile] human-view write failed to ensureDir:", err);
+      }
       return;
     }
   }
   const root = await ensureFsMirrorRoot(workspaceRoot);
   await ensureDir(root);
-  await writeFile(`${root}/profile.json`, JSON.stringify(profile, null, 2));
-  await writeFile(`${root}/profile.md`, renderProfileMarkdown(profile));
-  for (const dp of Object.values(profile.domains)) {
+  await writeFile(
+    `${root}/profile.json`,
+    JSON.stringify(diskProfile, null, 2),
+  );
+  await writeFile(`${root}/profile.md`, renderProfileMarkdown(diskProfile));
+  for (const dp of Object.values(diskProfile.domains)) {
     if (dp.split && dp.splitPath) {
       const absDir = `${workspaceRoot.replace(/\/$/, "")}/${dp.splitPath.replace(/\/profile\.md$/, "")}`;
       await ensureDir(absDir);
@@ -287,9 +367,7 @@ async function writeFile(path: string, content: string): Promise<void> {
 
 function renderProfileMarkdown(profile: Profile): string {
   const lines: string[] = [];
-  lines.push("# Engineering Profile (Continuously Learned by Terax)");
-  lines.push("");
-  lines.push("Auto-generated by the autonomous continuous-learning agent. Each preference carries a confidence score in [0, 1] that increases with repeated evidence and decays with disuse. Edit `.terax/profile.json` for the canonical state.");
+  lines.push("# Engineering Profile");
   lines.push("");
   const domainList = Object.values(profile.domains)
     .filter((d) => !d.split)
@@ -309,7 +387,7 @@ function renderProfileMarkdown(profile: Profile): string {
   for (const dp of splitRefs) {
     lines.push(`# ${dp.category}`);
     lines.push("");
-    lines.push(`See ${dp.splitPath} (${dp.preferences.length} preferences)`);
+    lines.push(`- See ${dp.splitPath}`);
     lines.push("");
   }
   return lines.join("\n");
@@ -317,14 +395,8 @@ function renderProfileMarkdown(profile: Profile): string {
 
 function renderDomainProfileMarkdown(dp: Profile["domains"][string]): string {
   const lines: string[] = [];
-  lines.push(`# ${dp.category} (Continuously Learned by Terax)`);
+  lines.push(`# ${dp.category}`);
   lines.push("");
-  lines.push("Auto-generated by the autonomous continuous-learning agent.");
-  lines.push("");
-  if (dp.preferences.length === 0) {
-    lines.push("_No preferences recorded yet._");
-    return lines.join("\n");
-  }
   for (const p of dp.preferences) {
     lines.push(renderPreferenceLine(p));
   }
@@ -333,19 +405,283 @@ function renderDomainProfileMarkdown(dp: Profile["domains"][string]): string {
 
 function renderPreferenceLine(p: Preference): string {
   const prefix = p.pinned ? "Pinned: " : "";
-  const marker = p.evidenceCount === 0 ? " (rejected)" : "";
-  const seenSuffix = p.evidenceCount > 1 ? ` (seen ${p.evidenceCount}x)` : "";
-  const lastObserved = formatLastObserved(p.lastObservedAt);
-  const tail = `Confidence: ${p.confidence.toFixed(2)}${seenSuffix}${lastObserved ? `, last ${lastObserved}` : ""}${marker}`;
-  return `- ${prefix}${p.preference}. ${tail}`;
+  return `- ${prefix}${p.preference}. Confidence: ${p.confidence.toFixed(2)}`;
 }
 
-function formatLastObserved(ts: number): string {
-  if (!ts) return "";
-  const d = new Date(ts);
-  const iso = d.toISOString().slice(0, 10);
-  if (iso === "1970-01-01") return "";
-  return iso;
+export async function syncProfileFromDisk(projectRoot: string): Promise<void> {
+  const rootMdPath = `${projectRoot.replace(/\/$/, "")}/.terax/profile.md`;
+  let rootMd: string | null = null;
+  try {
+    const r = await native.readFile(rootMdPath);
+    if (r.kind === "text") rootMd = r.content;
+  } catch {
+    return;
+  }
+  if (!rootMd) return;
+
+  const parsed = await parseProfileMarkdown(rootMd, projectRoot);
+  const existing = await storage.getProfile("project", projectRoot);
+  if (!existing) return;
+
+  const updatedPrefs: Preference[] = [];
+
+  for (const parsedPref of parsed.preferences) {
+    // Prevent duplicates in parsed preferences (exact normalized match only; no fuzzy/similarity).
+    // Manual edits to .terax/*.md are the source of truth for pinning/text; LLM refinement will
+    // re-consolidate on next pass.
+    const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, " ");
+    const duplicate = updatedPrefs.find(
+      (p) =>
+        p.category === parsedPref.category &&
+        norm(p.preference) === norm(parsedPref.preference),
+    );
+    if (duplicate) {
+      duplicate.pinned = duplicate.pinned || parsedPref.pinned;
+      duplicate.confidence = Math.max(duplicate.confidence, parsedPref.confidence);
+      continue;
+    }
+
+    const matched = existing.preferences.find(
+      (p) =>
+        p.category === parsedPref.category &&
+        norm(p.preference) === norm(parsedPref.preference),
+    );
+
+    if (matched) {
+      updatedPrefs.push({
+        ...matched,
+        preference: parsedPref.preference,
+        confidence: parsedPref.confidence,
+        pinned: parsedPref.pinned,
+      });
+    } else {
+      updatedPrefs.push({
+        id: newPreferenceId(),
+        category: parsedPref.category as Domain,
+        preference: parsedPref.preference,
+        confidence: parsedPref.confidence,
+        evidenceCount: 1,
+        firstObservedAt: Date.now(),
+        lastObservedAt: Date.now(),
+        signalIds: [],
+        supportingSources: [],
+        scope: "project",
+        projectRoot,
+        pinned: parsedPref.pinned,
+        supersededBy: null,
+      });
+    }
+  }
+
+  const profile: Profile = {
+    ...existing,
+    generatedAt: Date.now(),
+    preferences: updatedPrefs,
+  };
+
+  const domains: Record<string, any> = {};
+  for (const p of updatedPrefs) {
+    const domain = p.category;
+    let dp = domains[domain];
+    if (!dp) {
+      dp = {
+        category: domain,
+        summary: "",
+        preferences: [],
+        updatedAt: Date.now(),
+        split: existing.domains[domain]?.split ?? false,
+        splitPath: existing.domains[domain]?.splitPath ?? null,
+      };
+      domains[domain] = dp;
+    }
+    dp.preferences.push(p);
+  }
+
+  for (const [k, v] of Object.entries(existing.domains)) {
+    if (!domains[k]) {
+      domains[k] = {
+        ...v,
+        preferences: [],
+        updatedAt: Date.now(),
+      };
+    }
+  }
+
+  const { generateDomainSummary, generateSummary } = await import(
+    "./refinement"
+  );
+
+  for (const dp of Object.values(domains)) {
+    dp.preferences.sort(
+      (a: Preference, b: Preference) => b.confidence - a.confidence,
+    );
+    dp.summary = generateDomainSummary(dp.category, dp.preferences);
+  }
+
+  profile.domains = domains;
+  profile.summary = generateSummary(updatedPrefs, DEFAULT_REFINEMENT_CONFIG);
+
+  // Note the self-write so the fs watcher events from this write (and the direct
+  // json write below) don't immediately re-trigger syncProfileFromDisk via
+  // notifyUserFileEdit and create a continuous modification loop on profile.json.
+  noteProfileSelfWrite();
+
+  fsMirrorDisabled = true;
+  try {
+    await storage.saveProfile(profile);
+    const root = `${projectRoot.replace(/\/$/, "")}/.terax`;
+    await native.writeFile(
+      `${root}/profile.json`,
+      JSON.stringify(profile, null, 2),
+    );
+  } finally {
+    fsMirrorDisabled = false;
+  }
+}
+
+async function parseProfileMarkdown(
+  rootMdContent: string,
+  workspaceRoot: string,
+): Promise<{
+  preferences: {
+    category: string;
+    preference: string;
+    confidence: number;
+    pinned: boolean;
+  }[];
+}> {
+  const preferences: {
+    category: string;
+    preference: string;
+    confidence: number;
+    pinned: boolean;
+  }[] = [];
+
+  const lines = rootMdContent.split("\n");
+  let currentCategory = "general";
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+
+    if (trimmed.startsWith("# ")) {
+      const heading = trimmed.slice(2).trim();
+      const cleanHeading = heading
+        .replace(/\s*\(Continuously Learned by Terax\)/i, "")
+        .trim();
+      if (cleanHeading.toLowerCase() !== "engineering profile") {
+        currentCategory = cleanHeading.toLowerCase();
+      }
+      continue;
+    }
+
+    if (trimmed.startsWith("- ") || trimmed.startsWith("* ")) {
+      const bulletText = trimmed.slice(2).trim();
+
+      const splitMatch = bulletText.match(/See\s+([^\s(]+)/i);
+      if (splitMatch) {
+        const relPath = splitMatch[1];
+        const absPath = `${workspaceRoot.replace(/\/$/, "")}/${relPath.replace(/^\//, "")}`;
+        try {
+          const fileRes = await native.readFile(absPath);
+          if (fileRes.kind === "text") {
+            const splitPrefs = await parseDomainProfileMarkdown(
+              fileRes.content,
+              currentCategory,
+            );
+            preferences.push(...splitPrefs);
+          }
+        } catch (err) {
+          console.warn(
+            `[engineering-profile] Failed to read split profile at ${absPath}:`,
+            err,
+          );
+        }
+        continue;
+      }
+
+      const pref = parsePreferenceLine(bulletText, currentCategory);
+      if (pref) {
+        preferences.push(pref);
+      }
+    }
+  }
+
+  return { preferences };
+}
+
+async function parseDomainProfileMarkdown(
+  content: string,
+  category: string,
+): Promise<
+  {
+    category: string;
+    preference: string;
+    confidence: number;
+    pinned: boolean;
+  }[]
+> {
+  const preferences: {
+    category: string;
+    preference: string;
+    confidence: number;
+    pinned: boolean;
+  }[] = [];
+  const lines = content.split("\n");
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith("- ") || trimmed.startsWith("* ")) {
+      const bulletText = trimmed.slice(2).trim();
+      const pref = parsePreferenceLine(bulletText, category);
+      if (pref) {
+        preferences.push(pref);
+      }
+    }
+  }
+  return preferences;
+}
+
+function parsePreferenceLine(
+  text: string,
+  category: string,
+): {
+  category: string;
+  preference: string;
+  confidence: number;
+  pinned: boolean;
+} | null {
+  const confidenceRegex = /Confidence:\s*([0-9.]+)/i;
+  const match = text.match(confidenceRegex);
+  let confidence = 0.5;
+  let cleanText = text;
+
+  if (match) {
+    confidence = parseFloat(match[1]);
+    cleanText = text.replace(confidenceRegex, "").trim();
+    if (cleanText.endsWith(".")) {
+      cleanText = cleanText.slice(0, -1).trim();
+    }
+  }
+
+  cleanText = cleanText.replace(/\s*\([^)]+\)$/g, "").trim();
+  if (cleanText.endsWith(".")) {
+    cleanText = cleanText.slice(0, -1).trim();
+  }
+
+  let pinned = false;
+  if (cleanText.toLowerCase().startsWith("pinned:")) {
+    pinned = true;
+    cleanText = cleanText.slice(7).trim();
+  }
+
+  if (!cleanText) return null;
+
+  return {
+    category,
+    preference: cleanText,
+    confidence,
+    pinned,
+  };
 }
 
 export function makeBlankProfile(

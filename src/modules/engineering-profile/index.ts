@@ -98,7 +98,7 @@ export type { RecordSignalInput, RecordSignalResult } from "./signals";
 
 export { buildProfileTools } from "./tools";
 export { storage, makeBlankProfile } from "./storage";
-export { heuristicExtractor, llmExtractor, pickExtractor } from "./extraction";
+export { llmExtractor, pickExtractor } from "./extraction";
 export type { Extractor, ExtractorDeps } from "./extraction";
 export { observeUserMessage } from "./observer";
 export type { ObservationInput, ObservationResult } from "./observer";

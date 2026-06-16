@@ -41,11 +41,15 @@
  */
 
 import { observeUserMessage } from "./observer";
-import { refineProfile } from "./refinement";
-import { storage, getCachedConfig } from "./storage";
-import { useChatStore } from "@/modules/ai/store/chatStore";
-import type { ExtractorDeps } from "./extraction";
+import { refineProfile, type RefineResult } from "./refinement";
+import { storage } from "./storage";
 import type { Profile, Scope, Signal } from "./types";
+import {
+  acquireRefineLock,
+  markRefineInFlight,
+  makeExtractorDeps,
+} from "./autoRefine";
+import { getAnchoredProjectRoot } from "./projectRoot";
 
 const MIN_REFINEMENT_INTERVAL_MS = 4000;
 const IDLE_INTERVAL_MS = 90_000;
@@ -75,29 +79,33 @@ const state: AgentState = {
 
 const listeners = new Set<(s: AgentState) => void>();
 
+let schedulerStarted = false;
+let projectRoot: string | null = null;
+let idleInterval: NodeJS.Timeout | any = null;
+let patternMinerInterval: NodeJS.Timeout | any = null;
+let turnHadRejection = false;
+
 export function getAgentState(): Readonly<AgentState> {
-  return state;
+  return { ...state };
 }
 
-export function subscribeAgent(listener: (s: AgentState) => void): () => void {
+export function subscribeAgent(listener: (s: Readonly<AgentState>) => void): () => void {
   listeners.add(listener);
-  listener(state);
+  listener({ ...state });
   return () => {
     listeners.delete(listener);
   };
 }
 
 function emit(): void {
-  for (const l of listeners) l(state);
+  const snapshot = { ...state };
+  for (const l of listeners) l(snapshot);
 }
 
 function setState(patch: Partial<AgentState>): void {
   Object.assign(state, patch);
   emit();
 }
-
-let schedulerStarted = false;
-let projectRoot: string | null = null;
 
 export function startLearningAgent(root: string | null): void {
   projectRoot = root;
@@ -109,21 +117,51 @@ export function startLearningAgent(root: string | null): void {
       ? `Watching ${root} for preference signals`
       : "Waiting for workspace",
   });
-  const idle = setInterval(() => {
+  idleInterval = setInterval(() => {
     void idleTick();
   }, IDLE_INTERVAL_MS);
+  patternMinerInterval = setInterval(() => {
+    void runPatternMiner();
+  }, IDLE_INTERVAL_MS * 6);
   if (typeof window !== "undefined") {
-    window.addEventListener("beforeunload", () => clearInterval(idle));
+    window.addEventListener("beforeunload", () => {
+      if (idleInterval) clearInterval(idleInterval);
+      if (patternMinerInterval) clearInterval(patternMinerInterval);
+    });
   }
   void initialSweep();
 }
 
+async function runPatternMiner(): Promise<void> {
+  if (!projectRoot) return;
+  if (state.status !== "idle") return;
+  try {
+    const { minePatterns } = await import("./patternMining");
+    const result = await minePatterns({ projectRoot });
+    if (result.recorded.length > 0) {
+      setState({
+        lastSummary: `Pattern miner found ${result.recorded.length} new patterns`,
+      });
+    }
+  } catch (err) {
+    console.warn("[engineering-profile] pattern miner failed:", err);
+  }
+}
+
 export function stopLearningAgent(): void {
+  if (idleInterval) clearInterval(idleInterval);
+  if (patternMinerInterval) clearInterval(patternMinerInterval);
+  idleInterval = null;
+  patternMinerInterval = null;
   schedulerStarted = false;
   setState({ status: "idle" });
 }
 
 export function _resetAgentForTests(): void {
+  if (idleInterval) clearInterval(idleInterval);
+  if (patternMinerInterval) clearInterval(patternMinerInterval);
+  idleInterval = null;
+  patternMinerInterval = null;
   state.status = "idle";
   state.lastRefineAt = 0;
   state.signalsSinceLastRefine = 0;
@@ -133,6 +171,7 @@ export function _resetAgentForTests(): void {
   state.startedAt = Date.now();
   schedulerStarted = false;
   projectRoot = null;
+  turnHadRejection = false;
   emit();
 }
 
@@ -144,16 +183,74 @@ export function setAgentProjectRoot(root: string | null): void {
 }
 
 export function notifySignalRecorded(signal: Signal): void {
+  if (signal.scope === "project" && signal.projectRoot) {
+    setAgentProjectRoot(signal.projectRoot);
+  }
   state.signalsSinceLastRefine++;
   emit();
-  void maybeRefine("signal", signal);
 }
 
-export function notifyChatTurnFinished(): void {
-  void maybeRefine("turn-finished");
+export function notifyChatTurnFinished(
+  turn?: import("./feedbackLoop").TurnSnapshot,
+): void {
+  void handleTurnFinished(turn);
+}
+
+async function handleTurnFinished(
+  turn?: import("./feedbackLoop").TurnSnapshot,
+): Promise<void> {
+  if (turn) {
+    await runFeedbackForTurn(turn);
+  }
+  await maybeRefine("turn-finished");
+}
+
+async function runFeedbackForTurn(
+  turn: import("./feedbackLoop").TurnSnapshot,
+): Promise<void> {
+  const root = turn.projectRoot ?? projectRoot ?? getAnchoredProjectRoot();
+  try {
+    const { scoreAlignment, emitAlignmentSignals, recordTurnAcceptance } =
+      await import("./feedbackLoop");
+    if (root) {
+      const profile = await storage.getProfile("project", root);
+      if (profile) {
+        const scores = scoreAlignment(turn, profile);
+        let hadViolations = false;
+        if (scores.length > 0) {
+          const emitted = await emitAlignmentSignals(
+            scores,
+            root,
+            turn.sessionId,
+          );
+          if (emitted.length > 0) {
+            state.signalsSinceLastRefine += emitted.length;
+            emit();
+          }
+          hadViolations = scores.some((s) => s.alignment === "violated");
+        }
+        if (!turnHadRejection && !hadViolations) {
+          const accepted = await recordTurnAcceptance(
+            root,
+            turn.sessionId,
+            profile,
+          );
+          if (accepted.length > 0) {
+            state.signalsSinceLastRefine += accepted.length;
+            emit();
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.warn("[engineering-profile] turn feedback failed:", err);
+  } finally {
+    turnHadRejection = false;
+  }
 }
 
 export function notifyToolRejection(toolName: string, reason: string): void {
+  turnHadRejection = true;
   void observeUserMessage({
     text: `Don't use ${toolName} that way: ${reason}`,
     projectRoot,
@@ -165,8 +262,25 @@ export function notifyToolRejection(toolName: string, reason: string): void {
 export function notifyUserFileEdit(filePath: string, summary: string): void {
   const isProfileFile =
     filePath.endsWith("/.terax/profile.md") ||
-    filePath.endsWith("/.terax/profile.json");
-  if (isProfileFile) return;
+    filePath.endsWith("/.terax/profile.json") ||
+    filePath.includes("/.terax/");
+  if (isProfileFile) {
+    if (projectRoot) {
+      void import("./storage").then(async (m) => {
+        // Guard against our own writes: the Rust fs watcher (used by editor sync
+        // and file tree) + listenFsChanged will report our native.writeFile calls
+        // to profile files almost immediately. Without this, syncProfileFromDisk
+        // would run on our own output, rebuild, and write again → continuous loop
+        // modifying profile.json / .md.
+        const lastWrite = (m as any).getLastProfileSelfWrite?.() ?? 0;
+        if (Date.now() - lastWrite < 3000) {
+          return;
+        }
+        await m.syncProfileFromDisk(projectRoot!);
+      });
+    }
+    return;
+  }
   const text = `User edited ${filePath}: ${summary}`;
   void observeUserMessage({ text, projectRoot }).then(() => {
     void maybeRefine("user-edit");
@@ -181,8 +295,13 @@ async function idleTick(): Promise<void> {
 async function initialSweep(): Promise<void> {
   if (!projectRoot) return;
   try {
-    const signals = await storage.loadSignals("user", null);
-    if (signals.length > 0) {
+    const { isBootstrapped } = await import("./bootstrap");
+    if (!(await isBootstrapped(projectRoot))) return;
+    const [projectSignals, userSignals] = await Promise.all([
+      storage.loadSignals("project", projectRoot),
+      storage.loadSignals("user", null),
+    ]);
+    if (projectSignals.length > 0 || userSignals.length > 0) {
       await maybeRefine("initial-sweep");
     }
   } catch {
@@ -191,7 +310,13 @@ async function initialSweep(): Promise<void> {
 }
 
 async function maybeRefine(
-  trigger: "signal" | "turn-finished" | "rejection" | "user-edit" | "idle-tick" | "initial-sweep",
+  trigger:
+    | "signal"
+    | "turn-finished"
+    | "rejection"
+    | "user-edit"
+    | "idle-tick"
+    | "initial-sweep",
   _signal?: Signal,
 ): Promise<void> {
   const now = Date.now();
@@ -201,46 +326,86 @@ async function maybeRefine(
   await runRefinePass(trigger);
 }
 
-async function runRefinePass(
-  trigger: string,
-): Promise<void> {
-  if (!projectRoot) {
-    setState({ status: "idle", lastSummary: "No workspace anchored yet" });
+async function runRefinePass(trigger: string): Promise<void> {
+  const scopes = await scopesNeedingRefine();
+  if (scopes.length === 0) {
+    setState({ status: "idle", lastSummary: "No pending signals to refine" });
     return;
   }
+  const projectScope = scopes.find((s) => s.scope === "project");
+  if (projectScope?.projectRoot) {
+    const { isBootstrapped } = await import("./bootstrap");
+    if (!(await isBootstrapped(projectScope.projectRoot))) {
+      setState({ status: "idle", lastSummary: "Project not bootstrapped yet" });
+      return;
+    }
+  }
+  const lockScope: Scope = projectScope ? "project" : "user";
+  const lockRoot = projectScope?.projectRoot ?? null;
+  if (!acquireRefineLock(lockScope, lockRoot)) return;
   setState({ status: "observing", lastSummary: `Triggered by ${trigger}` });
   const t0 = Date.now();
-  try {
+  const job = (async () => {
     const deps = makeExtractorDeps();
-    setState({ status: "refining", lastSummary: "Refining profile (LLM pass)" });
-    const projectResult = await refineProfile(deps, {
-      scope: "project",
-      projectRoot,
-      note: `auto-refine (${trigger})`,
+    setState({
+      status: "refining",
+      lastSummary: "Refining profile (LLM pass)",
     });
+    const results: RefineResult[] = [];
+    for (const target of scopes) {
+      results.push(
+        await refineProfile(deps, {
+          scope: target.scope,
+          projectRoot: target.projectRoot,
+          note: `auto-refine ${target.scope} (${trigger})`,
+        }),
+      );
+    }
+    const last = results[results.length - 1]!;
     setState({ status: "writing", lastSummary: "Writing profile.md" });
     state.signalsSinceLastRefine = 0;
     state.lastRefineAt = Date.now();
     state.totalRefinements++;
     setState({
       status: "idle",
-      lastSummary: `Refined ${projectResult.added.length} added, ${projectResult.removed.length} removed, ${projectResult.modified.length} modified in ${Date.now() - t0}ms`,
+      lastSummary: `Refined ${last.added.length} added, ${last.removed.length} removed, ${last.modified.length} modified in ${Date.now() - t0}ms`,
       lastError: null,
     });
+  })();
+  markRefineInFlight(lockScope, lockRoot, job);
+  try {
+    await job;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     setState({ status: "error", lastError: msg, lastSummary: `Error: ${msg}` });
   }
 }
 
-function makeExtractorDeps(): ExtractorDeps {
-  const chat = useChatStore.getState();
-  return {
-    getKeys: () => chat.apiKeys,
-    getModelId: () => chat.selectedModelId,
-    getLocalConfig: () => undefined,
-    getConfig: () => getCachedConfig(),
-  };
+async function scopesNeedingRefine(): Promise<
+  { scope: Scope; projectRoot: string | null }[]
+> {
+  const out: { scope: Scope; projectRoot: string | null }[] = [];
+  const activeRoot = projectRoot ?? getAnchoredProjectRoot();
+  const userSignals = await storage.loadSignals("user", null);
+  const projectSignals = activeRoot
+    ? await storage.loadSignals("project", activeRoot)
+    : [];
+  if (userSignals.length > 0) {
+    out.push({ scope: "user", projectRoot: null });
+  }
+  if (
+    activeRoot &&
+    (projectSignals.length > 0 || state.signalsSinceLastRefine > 0)
+  ) {
+    out.push({ scope: "project", projectRoot: activeRoot });
+  }
+  if (out.length === 0 && state.signalsSinceLastRefine > 0) {
+    out.push({
+      scope: activeRoot ? "project" : "user",
+      projectRoot: activeRoot ?? null,
+    });
+  }
+  return out;
 }
 
 export async function forceRefine(
@@ -248,9 +413,13 @@ export async function forceRefine(
   projectRootOverride: string | null,
 ): Promise<void> {
   const root = projectRootOverride ?? projectRoot;
-  if (!root) return;
+  if (scope === "project" && !root) return;
   const deps = makeExtractorDeps();
-  await refineProfile(deps, { scope, projectRoot: root, note: "forced by user" });
+  await refineProfile(deps, {
+    scope,
+    projectRoot: scope === "project" ? root : null,
+    note: "forced by user",
+  });
   state.lastRefineAt = Date.now();
   state.signalsSinceLastRefine = 0;
   setState({
@@ -265,9 +434,13 @@ export async function forceRefineSync(
   projectRootOverride: string | null,
 ): Promise<Profile | null> {
   const root = projectRootOverride ?? projectRoot;
-  if (!root) return null;
+  if (scope === "project" && !root) return null;
   const deps = makeExtractorDeps();
-  const result = await refineProfile(deps, { scope, projectRoot: root, note: "forced sync" });
+  const result = await refineProfile(deps, {
+    scope,
+    projectRoot: scope === "project" ? root : null,
+    note: "forced sync",
+  });
   state.lastRefineAt = Date.now();
   state.signalsSinceLastRefine = 0;
   setState({

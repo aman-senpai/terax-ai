@@ -33,8 +33,12 @@ export function editorToText(root: HTMLElement): string {
     ) {
       // Ghost text — skip entirely (not real content).
     } else if (child instanceof HTMLElement) {
-      // Unknown element — fall back to text
-      parts.push(child.textContent ?? "");
+      if (child.tagName === "BR") {
+        parts.push("\n");
+      } else {
+        // Unknown element — fall back to its text (defensive)
+        parts.push(child.textContent ?? "");
+      }
     } else {
       parts.push(child.textContent ?? "");
     }
@@ -216,14 +220,65 @@ export function editorToSubmitText(root: HTMLElement): string {
   return parts.join("");
 }
 
-/** Insert plain text at the current cursor position. */
-export function insertTextAtCaret(_root: HTMLElement, text: string) {
+/**
+ * Remove or flatten any nodes inside the contenteditable that are not:
+ * - text nodes
+ * - our controlled chip spans (file/snippet/command)
+ * - ghost autocomplete spans
+ * Also normalizes <br> into \n text nodes for consistent plain-text value.
+ * Call on edit paths (paste, input) to keep the DOM hierarchy clean.
+ */
+export function sanitizeContentEditable(root: HTMLElement): void {
+  // Work on a snapshot because we mutate during iteration
+  const children = Array.from(root.childNodes);
+  for (const child of children) {
+    if (child.nodeType === Node.TEXT_NODE) continue;
+
+    if (child instanceof HTMLElement) {
+      const chipKind = child.dataset.chip;
+      if (chipKind === "file" || chipKind === "snippet" || chipKind === "command") {
+        continue;
+      }
+      if (child.dataset.ghost !== undefined) continue;
+
+      if (child.tagName === "BR") {
+        child.replaceWith(document.createTextNode("\n"));
+        continue;
+      }
+
+      // Bad node (img, rich span, div, etc from paste). Flatten to its text or remove.
+      const txt = child.textContent ?? "";
+      if (txt) {
+        child.replaceWith(document.createTextNode(txt));
+      } else {
+        child.remove();
+      }
+      continue;
+    }
+
+    // Other node types (comments, etc.)
+    child.parentNode?.removeChild(child);
+  }
+}
+
+/** Insert plain text at the current cursor position (sanitizes first). */
+export function insertTextAtCaret(root: HTMLElement, text: string) {
+  sanitizeContentEditable(root);
   const sel = window.getSelection();
-  if (!sel || !sel.rangeCount) return;
+  if (!sel || !sel.rangeCount) {
+    root.appendChild(document.createTextNode(text));
+    return;
+  }
   const range = sel.getRangeAt(0);
+  if (!root.contains(range.startContainer)) {
+    root.appendChild(document.createTextNode(text));
+    return;
+  }
   range.deleteContents();
-  range.insertNode(document.createTextNode(text));
-  range.collapse(false);
+  const tn = document.createTextNode(text);
+  range.insertNode(tn);
+  range.setStartAfter(tn);
+  range.collapse(true);
   sel.removeAllRanges();
   sel.addRange(range);
 }

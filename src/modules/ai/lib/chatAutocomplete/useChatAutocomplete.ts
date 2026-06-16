@@ -3,7 +3,6 @@ import { useCallback, useEffect, useRef } from "react";
 import { getChat, useChatStore } from "../../store/chatStore";
 import {
   editorToText,
-  getCaretOffset,
   setCaretOffset,
 } from "../contenteditable";
 import { getKey } from "../keyring";
@@ -104,25 +103,25 @@ function removeGhostSpan(root: HTMLElement): void {
 
 function replaceGhostWithText(root: HTMLElement, ghostText: string): number {
   const ghost = root.querySelector("[data-ghost]");
-  let caretOffset = -1;
+  if (!ghost) return -1;
 
-  if (ghost) {
-    const parent = ghost.parentNode;
-    if (parent) {
-      // Compute the text offset of the ghost before removing it.
-      caretOffset = getCaretOffset(root);
+  const parent = ghost.parentNode;
+  if (!parent) return -1;
 
-      const textNode = document.createTextNode(ghostText);
-      parent.replaceChild(textNode, ghost);
+  // Always append the ghost suggestion to the *end of the real committed text*
+  // (the prefix that triggered the suggestion). Ignore the current caret
+  // position so that arrow navigation before accepting doesn't corrupt the
+  // inserted value or final caret. The ghost lives at the end of the prefix
+  // in the DOM regardless of selection.
+  const prefixLen = editorToText(root).length;
 
-      // Set caret immediately after the inserted text — synchronous to avoid
-      // a visible cursor flash at the wrong position.
-      const finalCaret = caretOffset + ghostText.length;
-      setCaretOffset(root, finalCaret);
-      return finalCaret;
-    }
-  }
-  return caretOffset;
+  const textNode = document.createTextNode(ghostText);
+  parent.replaceChild(textNode, ghost);
+
+  // Set caret immediately after the inserted suggestion.
+  const finalCaret = prefixLen + ghostText.length;
+  setCaretOffset(root, finalCaret);
+  return finalCaret;
 }
 
 export function useChatAutocomplete(
@@ -396,11 +395,11 @@ export function useChatAutocomplete(
 
     el.focus();
 
-    // Build the new value including the ghost text.
-    const caret = getCaretOffset(el);
+    // Always append the suggestion to the real prefix (ghost contributes 0
+    // to editorToText). This is robust even if the user arrowed the caret
+    // before pressing the accept key.
     const fullText = editorToText(el);
-    const newText =
-      fullText.slice(0, caret) + ghostText + fullText.slice(caret);
+    const newText = fullText + ghostText;
 
     replaceGhostWithText(el, ghostText);
     ghostActiveRef.current = false;
@@ -415,7 +414,7 @@ export function useChatAutocomplete(
       const hasGhost = el?.querySelector("[data-ghost]");
       if (!hasGhost) return false;
 
-      if (e.key === "Tab") {
+      if (e.key === "Tab" || e.key === "ArrowRight") {
         e.preventDefault();
         accept();
         return true;
@@ -425,6 +424,20 @@ export function useChatAutocomplete(
         e.preventDefault();
         cancelPending();
         return true;
+      }
+
+      // Other navigation keys: dismiss the ghost so it doesn't linger when
+      // the caret is no longer at the suggestion attachment point. The user
+      // can still accept with Tab/Right before moving.
+      if (
+        e.key === "ArrowLeft" ||
+        e.key === "ArrowUp" ||
+        e.key === "ArrowDown" ||
+        e.key === "Home" ||
+        e.key === "End"
+      ) {
+        cancelPending();
+        return false;
       }
 
       if (

@@ -1,6 +1,18 @@
 import type { RefinementConfig, Signal, SignalSource } from "./types";
 import { SOURCE_WEIGHTS } from "./types";
 
+/** Matches feedbackLoop KL anchor — preferences never decay below this floor. */
+export const REWARD_ANCHOR_MIN = 0.25;
+/** Max confidence from feedback alone; higher needs repeated reinforcement. */
+export const REWARD_ANCHOR_MAX = 0.99;
+export const REINFORCEMENT_MIN_SIGNALS = 2;
+
+const REINFORCEMENT_SOURCES: ReadonlySet<SignalSource> = new Set([
+  "explicit-feedback",
+  "accepted-change",
+  "architecture-decision",
+]);
+
 /**
  * Squashes a real-valued score to [0, 1]. A sum of weighted signals is
  * bounded near ±1 once enough evidence accumulates, which is what we want
@@ -96,6 +108,31 @@ export function normalizeConfidence(
 ): number {
   const adj = adjustByEvidence(score, signals);
   return clamp01(adj);
+}
+
+/**
+ * KL anchor: floor at minConfidence, cap raises above REWARD_ANCHOR_MAX unless
+ * enough independent reinforcement signals support the preference.
+ */
+export function applyKlAnchor(
+  confidence: number,
+  signals: ReadonlyArray<Signal>,
+  config: RefinementConfig,
+  pinned: boolean,
+): number {
+  if (pinned) return clamp01(confidence);
+  const floor = Math.max(REWARD_ANCHOR_MIN, config.minConfidence);
+  let anchored = Math.max(floor, confidence);
+  const reinforcementCount = signals.filter((s) =>
+    REINFORCEMENT_SOURCES.has(s.source),
+  ).length;
+  if (anchored > REWARD_ANCHOR_MAX) {
+    anchored =
+      reinforcementCount >= REINFORCEMENT_MIN_SIGNALS
+        ? Math.min(anchored, REWARD_ANCHOR_MAX)
+        : REWARD_ANCHOR_MAX;
+  }
+  return clamp01(anchored);
 }
 
 export function olderSignal(a: Signal, b: Signal): Signal {

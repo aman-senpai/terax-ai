@@ -77,7 +77,8 @@ export function useEditorFileSync({ tabs, tabsRef, editorRefs }: Params) {
   useEffect(() => {
     let alive = true;
     let unlisten: (() => void) | undefined;
-    void listenFsChanged((paths) => {
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    const handlePaths = (paths: string[]) => {
       const changed = new Set(paths.map((p) => p.replace(/\\/g, "/")));
       for (const t of tabsRef.current) {
         if (t.kind !== "editor") continue;
@@ -85,13 +86,25 @@ export function useEditorFileSync({ tabs, tabsRef, editorRefs }: Params) {
           editorRefs.current.get(t.id)?.reload();
         }
       }
-    }).then((un) => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        for (const p of paths) {
+          void import("@/modules/engineering-profile/learningAgent").then(
+            ({ notifyUserFileEdit }) => {
+              notifyUserFileEdit(p, "user edited file");
+            },
+          );
+        }
+      }, 1500);
+    };
+    void listenFsChanged(handlePaths).then((un) => {
       if (alive) unlisten = un;
       else un();
     });
     return () => {
       alive = false;
       unlisten?.();
+      if (debounceTimer) clearTimeout(debounceTimer);
     };
   }, [tabsRef, editorRefs]);
 }

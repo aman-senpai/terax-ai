@@ -202,9 +202,18 @@ export function AiChatView({
     !isBusy && hitStepCap && lastMessage?.role === "assistant";
 
   const onApproval = useCallback(
-    (id: string, approved: boolean) =>
-      addToolApprovalResponse({ id, approved }),
-    [addToolApprovalResponse],
+    (id: string, approved: boolean) => {
+      if (!approved) {
+        const part = findToolPartByApproval(messages, id);
+        const toolName = part ? toolNameOf(part) : "tool";
+        const evidence = part ? toolEvidence(part) : "user rejected";
+        void import("@/modules/engineering-profile/learningAgent").then(
+          ({ notifyToolRejection }) => notifyToolRejection(toolName, evidence),
+        );
+      }
+      addToolApprovalResponse({ id, approved });
+    },
+    [addToolApprovalResponse, messages],
   );
 
   const pendingApprovals = useMemo(() => {
@@ -839,4 +848,42 @@ function AutoApprovalBadge({ approved }: { approved: boolean }) {
       </span>
     </div>
   );
+}
+
+type LooseToolPart = {
+  type: string;
+  state?: string;
+  toolName?: string;
+  input?: unknown;
+  output?: unknown;
+  approval?: { id?: string };
+  errorText?: string;
+};
+
+function findToolPartByApproval(
+  messages: { parts: unknown[] }[],
+  approvalId: string,
+): LooseToolPart | null {
+  for (const m of messages) {
+    for (const p of m.parts) {
+      const part = p as LooseToolPart;
+      if (part?.approval?.id === approvalId) return part;
+    }
+  }
+  return null;
+}
+
+function toolNameOf(part: LooseToolPart): string {
+  if (part.type === "dynamic-tool" && part.toolName) return part.toolName;
+  return part.type.replace(/^tool-/, "");
+}
+
+function toolEvidence(part: LooseToolPart): string {
+  const name = toolNameOf(part);
+  const input = (part.input ?? {}) as Record<string, unknown>;
+  const path = typeof input.path === "string" ? input.path : null;
+  const cmd = typeof input.command === "string" ? input.command : null;
+  if (path) return `user rejected ${name} on ${path}`;
+  if (cmd) return `user rejected ${name} (${cmd.slice(0, 80)})`;
+  return `user rejected ${name}`;
 }

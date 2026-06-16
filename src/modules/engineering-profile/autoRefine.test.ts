@@ -29,8 +29,8 @@ vi.mock("./storage", async () => {
     appendSnapshot: vi.fn(async () => {}),
     loadSnapshots: vi.fn(async () => []),
     getConfig: vi.fn(async () => ({
-      provider: "heuristic",
-      modelId: "engineering-profile-heuristic-v1",
+      provider: "openai",
+      modelId: "gpt-5",
       minConfidence: 0.35,
       maxAgeMs: 180 * 24 * 60 * 60 * 1000,
       decayHalfLifeMs: 60 * 24 * 60 * 60 * 1000,
@@ -50,8 +50,8 @@ vi.mock("./storage", async () => {
     ...actual,
     storage: memory,
     getCachedConfig: () => ({
-      provider: "heuristic",
-      modelId: "engineering-profile-heuristic-v1",
+      provider: "openai",
+      modelId: "gpt-5",
       minConfidence: 0.35,
       maxAgeMs: 180 * 24 * 60 * 60 * 1000,
       decayHalfLifeMs: 60 * 24 * 60 * 60 * 1000,
@@ -66,7 +66,8 @@ vi.mock("./storage", async () => {
 });
 
 vi.mock("./refinement", async () => {
-  const actual = await vi.importActual<typeof import("./refinement")>("./refinement");
+  const actual =
+    await vi.importActual<typeof import("./refinement")>("./refinement");
   return {
     ...actual,
     refineProfile: vi.fn(async () => ({
