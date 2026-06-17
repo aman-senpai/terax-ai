@@ -464,6 +464,16 @@ export const useChatStore = create<StoreState>((set, get) => ({
       void (async () => {
         try {
           const state = get();
+          // Use the live Chat's messages if available so the title LLM can see
+          // the first assistant reply for better context (schedule happens on
+          // the first user message; generation is async and may overlap the turn).
+          const liveChat = chats.get(id);
+          const liveMessages = liveChat?.messages;
+          const msgs =
+            (liveMessages?.length ?? 0) > 0
+              ? (liveMessages ?? messages)
+              : messages;
+
           const prefs = usePreferencesStore.getState();
           const local: TitleGenLocalConfig = {
             lmstudioBaseURL: prefs.lmstudioBaseURL,
@@ -479,7 +489,7 @@ export const useChatStore = create<StoreState>((set, get) => ({
             customEndpointKeys: state.customEndpointKeys,
           };
           const llmTitle = await generateSessionTitle(
-            messages,
+            msgs,
             state.selectedModelId,
             state.apiKeys,
             local,
@@ -488,8 +498,17 @@ export const useChatStore = create<StoreState>((set, get) => ({
           const latestSessions = get().sessions;
           const m = latestSessions.find((s) => s.id === id);
           if (!m) return;
+
+          // Recompute a current quick derive so we can still upgrade titles
+          // that match the current first-message derive (handles legacy short
+          // titles or races between the quick set and async completion).
+          const currentQuick = deriveTitle(msgs);
           const stillAuto =
-            !m.title || m.title === "New chat" || m.title === baseTitle;
+            !m.title ||
+            m.title === "New chat" ||
+            m.title === baseTitle ||
+            m.title === currentQuick ||
+            m.title.length <= 45;
           if (stillAuto && llmTitle !== m.title) {
             const next = latestSessions.map((s) =>
               s.id === id

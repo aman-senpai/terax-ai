@@ -418,7 +418,7 @@ export function CsvPreviewPane({ path, visible, onSetView }: Props) {
 
   const startIdx = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - OVERSCAN);
   const visibleCount =
-    Math.ceil((containerHeight - HEADER_HEIGHT) / ROW_HEIGHT) + OVERSCAN * 2;
+    Math.ceil(containerHeight / ROW_HEIGHT) + OVERSCAN * 2;
   const endIdx = Math.min(totalDataRows, startIdx + visibleCount);
 
   const visibleRows = dataRows.slice(startIdx, endIdx);
@@ -509,7 +509,7 @@ export function CsvPreviewPane({ path, visible, onSetView }: Props) {
                 <tr>
                   <th
                     scope="col"
-                    className="sticky top-0 z-20 border-b border-r border-border/50 bg-muted/80 px-2 text-right text-[10px] font-medium tabular-nums text-muted-foreground/50 backdrop-blur select-none"
+                    className="sticky top-10 z-20 border-b border-r border-border/50 bg-muted/80 px-2 text-right text-[10px] font-medium tabular-nums text-muted-foreground/50 backdrop-blur select-none"
                     style={{
                       height: HEADER_HEIGHT,
                       minWidth: "3.5rem",
@@ -525,7 +525,7 @@ export function CsvPreviewPane({ path, visible, onSetView }: Props) {
                       <th
                         key={ci}
                         scope="col"
-                        className="sticky top-0 z-10 border-b border-r border-border/50 bg-muted/80 px-0 text-left font-semibold backdrop-blur"
+                        className="sticky top-10 z-10 border-b border-r border-border/50 bg-muted/80 px-0 text-left font-semibold backdrop-blur"
                         style={{ height: HEADER_HEIGHT, color: colColor(ci) }}
                         // biome-ignore lint/a11y/noNoninteractiveElementToInteractiveRole: spreadsheet header
                         onDoubleClick={(e) =>

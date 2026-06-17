@@ -95,13 +95,13 @@ export type TitleGenLocalConfig = {
   customEndpointKeys?: CustomEndpointKeys;
 };
 
-const TITLE_SYSTEM = `You create concise, informative titles for AI chat threads in a coding assistant.
+const TITLE_SYSTEM = `You create concise, informative titles for AI chat threads.
 
-Given the opening of a conversation, reply with exactly one title of 3-8 words that captures the main goal or topic.
+Given the start of a conversation, reply with exactly one title of 3-8 words that captures the user's intent or topic.
 
 Rules:
-- Be specific and include key details from the user's request (tech, file, error, feature).
-- Do not start with "Help", "Question", "How to", "Chat", "New".
+- Be specific; include key entities or actions when clear.
+- Avoid starting with "Help", "Question", "How to", "Chat", "New".
 - No quotes, no trailing punctuation, no markdown.
 - Output only the title on a single line.`;
 
