@@ -42,7 +42,7 @@ export type Live = {
   injectIntoActivePty: (text: string) => boolean;
   getWorkspaceRoot: () => string | null;
   /**
-   * Stable project root — the directory Terax was opened in. Distinct
+   * Stable project root — the directory Xterax was opened in. Distinct
    * from `getWorkspaceRoot` which follows the active terminal's cwd.
    * Used by the engineering profile system to anchor the .terx/
    * directory to the project root instead of the current subdirectory.

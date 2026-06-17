@@ -1,27 +1,19 @@
 <div align="center">
-  <img src="public/logo.png" width="144" height="144" alt="Terax" />
-  <h1>Terax</h1>
+  <img src="public/logo.png" width="144" height="144" alt="Xterax" />
+  <h1>Xterax</h1>
 
   <p><strong>Lightweight Terminal-first AI-native dev workspace.</strong></p>
 
   <p>
-    <img src="https://img.shields.io/github/v/release/crynta/terax-ai?label=version&color=blue" alt="version" />
+    <img src="https://img.shields.io/github/v/release/aman-senpai/xterax?label=version&color=blue" alt="version" />
     <img src="https://img.shields.io/badge/license-Apache--2.0-green" alt="license" />
     <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey" alt="platform" />
-  </p>
-
-  <p>
-    <a href="https://terax.app">Website</a>
-    ·
-    <a href="https://terax.app/docs">Docs</a>
-    ·
-    <a href="https://github.com/crynta/Terax-website">Website's source code</a>
   </p>
 </div>
 
 ---
 
-Terax is a lightweight open-source terminal (ADE) built on Tauri 2 + Rust and React 19. A native PTY backend with a WebGL renderer, an agentic AI side-panel that runs against your own keys or fully local models, plus a code editor, file explorer, source control with a git graph, and a web preview pane built in. About 7-8 MB on disk. No telemetry. No account.
+Xterax is a lightweight open-source terminal (ADE) built on Tauri 2 + Rust and React 19. A native PTY backend with a WebGL renderer, an agentic AI side-panel that runs against your own keys or fully local models, plus a code editor, file explorer, source control with a git graph, and a web preview pane built in. About 7-8 MB on disk. No telemetry. No account.
 
 ## Screenshots
 
@@ -86,31 +78,31 @@ Terax is a lightweight open-source terminal (ADE) built on Tauri 2 + Rust and Re
 
 - **BYOK providers:** OpenAI, Anthropic, Google (Gemini), Groq, xAI (Grok), Cerebras, OpenRouter, DeepSeek, Mistral, plus any OpenAI-compatible endpoint
 - **Local / offline:** LM Studio, MLX, Ollama
-- **Agentic workflow:** plans, sub-agents, project memory via `TERAX.md`, file read / write / edit / multi-edit / grep / glob, bash with approval gating, background processes
+- **Agentic workflow:** plans, sub-agents, project memory via `XTERAX.md`, file read / write / edit / multi-edit / grep / glob, bash with approval gating, background processes
 - **Composer:** snippets via `#handle`, files via `@path`, slash commands, voice input, attach-to-agent from explorer or selection
 - **Custom agents** with their own system prompt and tool subset
 - **Plan mode** for multi-step work, generates and confirms before doing
 
 ## Install
 
-Latest installers are on the [Releases](https://github.com/crynta/terax-ai/releases/latest) page. Terax auto-updates from there.
+Latest installers are on the [Releases](https://github.com/aman-senpai/xterax/releases/latest) page. Xterax auto-updates from there.
 
 ### Windows notes
 
-- On first launch Windows shows "Windows protected your PC" because Terax isn't code-signed yet. Click **More info** then **Run anyway**.
+- On first launch Windows shows "Windows protected your PC" because Xterax isn't code-signed yet. Click **More info** then **Run anyway**.
 - Default shell detection: `pwsh.exe` (PowerShell 7+) -> `powershell.exe` (Windows PowerShell 5.1) -> `cmd.exe`.
 - WSL is a first-class workspace environment, not a wrapped subprocess.
 
 ### Linux notes
 
-- **Arch / AUR:** `yay -S terax-bin` (or `paru`, etc.). Tracks the latest release.
-- **NixOS / Nix**: use the official flake — `nix profile install github:crynta/terax-ai` (non-NixOS), or import the flake and add `inputs.terax.packages.${pkgs.system}.terax` to `environment.systemPackages` (NixOS). The `nixosModules.terax` output is also available for a simpler setup.
-- **AppImage:** needs FUSE. Without it: `./Terax_*.AppImage --appimage-extract-and-run`. On Wayland with rendering glitches, try `WEBKIT_DISABLE_DMABUF_RENDERER=1`. Otherwise the `.deb` / `.rpm` packages link against the system GTK stack and tend to be smoother.
+- **Arch / AUR:** `yay -S xterax-bin` (or `paru`, etc.). Tracks the latest release.
+- **NixOS / Nix**: use the official flake — `nix profile install github:aman-senpai/xterax` (non-NixOS), or import the flake and add `inputs.xterax.packages.${pkgs.system}.xterax` to `environment.systemPackages` (NixOS). The `nixosModules.xterax` output is also available for a simpler setup.
+- **AppImage:** needs FUSE. Without it: `./Xterax_*.AppImage --appimage-extract-and-run`. On Wayland with rendering glitches, try `WEBKIT_DISABLE_DMABUF_RENDERER=1`. Otherwise the `.deb` / `.rpm` packages link against the system GTK stack and tend to be smoother.
 
 ## Configure AI
 
 1. Open **Settings -> AI**.
-2. Pick a provider and paste your API key. For local inference, point Terax at your LM Studio / MLX / Ollama endpoint.
+2. Pick a provider and paste your API key. For local inference, point Xterax at your LM Studio / MLX / Ollama endpoint.
 3. Keys are written to the OS keychain via `keyring`. They never touch disk or localStorage.
 
 ## Build from source
@@ -144,16 +136,16 @@ Issues and PRs are welcome! Feel free to open issues, suggest features, or submi
 
 ## License
 
-Terax is licensed under the Apache-2.0 License. For more information on our dependencies, see [Apache License 2.0](LICENSE).
+Xterax is licensed under the Apache-2.0 License. For more information on our dependencies, see [Apache License 2.0](LICENSE).
 
 ## Star history
 
 <div align="center">
-  <a href="https://www.star-history.com/#crynta/terax-ai&Date">
+  <a href="https://www.star-history.com/#aman-senpai/xterax&Date">
     <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=crynta/terax-ai&type=Date&theme=dark" />
-      <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=crynta/terax-ai&type=Date" />
-      <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=crynta/terax-ai&type=Date" />
+      <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=aman-senpai/xterax&type=Date&theme=dark" />
+      <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=aman-senpai/xterax&type=Date" />
+      <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=aman-senpai/xterax&type=Date" />
     </picture>
   </a>
 </div>

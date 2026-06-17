@@ -80,7 +80,7 @@ describe("buildDomainProfiles — split thresholds", () => {
       {},
     );
     expect(domains.design.split).toBe(true);
-    expect(domains.design.splitPath).toBe(".terax/design/profile.md");
+    expect(domains.design.splitPath).toBe(".xterax/design/profile.md");
   });
 
   it("does NOT split if average confidence is below threshold", () => {
@@ -127,7 +127,7 @@ describe("buildDomainProfiles — split thresholds", () => {
         preferences: [],
         updatedAt: 0,
         split: true,
-        splitPath: ".terax/design/profile.md",
+        splitPath: ".xterax/design/profile.md",
       },
     };
     const domains = buildDomainProfiles(
@@ -138,7 +138,7 @@ describe("buildDomainProfiles — split thresholds", () => {
       prior,
     );
     expect(domains.design.split).toBe(true);
-    expect(domains.design.splitPath).toBe(".terax/design/profile.md");
+    expect(domains.design.splitPath).toBe(".xterax/design/profile.md");
   });
 
   it("uses the configured thresholds, not the defaults", () => {
@@ -168,7 +168,7 @@ describe("buildDomainProfiles — split thresholds", () => {
     );
     expect(domains["Design System"].split).toBe(true);
     expect(domains["Design System"].splitPath).toBe(
-      ".terax/design-system/profile.md",
+      ".xterax/design-system/profile.md",
     );
   });
 });

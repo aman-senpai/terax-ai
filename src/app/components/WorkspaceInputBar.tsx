@@ -13,7 +13,7 @@ import { useSystemInfo } from "./useSystemInfo";
 
 const ShellInput = lazy(() => import("@/modules/terminal/block/ShellInput"));
 
-export const TOGGLE_BLOCK_INPUT_EVENT = "terax:toggle-block-input";
+export const TOGGLE_BLOCK_INPUT_EVENT = "xterax:toggle-block-input";
 
 type Props = {
   isBlockTab: boolean;

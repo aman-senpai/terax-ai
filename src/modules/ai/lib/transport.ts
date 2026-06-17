@@ -21,7 +21,7 @@ import { type AgentUsageDelta, runAgentStream } from "./agent";
 import type { CustomEndpointKeys, ProviderKeys } from "./keyring";
 import { native } from "./native";
 
-const TERAX_MD_MAX_BYTES = 32 * 1024;
+const XTERAX_MD_MAX_BYTES = 32 * 1024;
 type MemoryCacheEntry = { content: string | null; mtime: number };
 const projectMemoryCache = new Map<string, MemoryCacheEntry>();
 const profilePackageCache = new Map<
@@ -31,11 +31,11 @@ const profilePackageCache = new Map<
 const PROFILE_PACKAGE_TTL_MS = 30_000;
 const bootstrappedProjects = new Set<string>();
 
-async function readTeraxMd(
+async function readXteraxMd(
   workspaceRoot: string | null,
 ): Promise<string | null> {
   if (!workspaceRoot) return null;
-  const path = `${workspaceRoot.replace(/\/$/, "")}/TERAX.md`;
+  const path = `${workspaceRoot.replace(/\/$/, "")}/XXTERAX.md`;
   const cached = projectMemoryCache.get(workspaceRoot);
   if (cached && Date.now() - cached.mtime < 30_000) return cached.content;
   try {
@@ -48,8 +48,8 @@ async function readTeraxMd(
       return null;
     }
     const content =
-      r.content.length > TERAX_MD_MAX_BYTES
-        ? r.content.slice(0, TERAX_MD_MAX_BYTES)
+      r.content.length > XTERAX_MD_MAX_BYTES
+        ? r.content.slice(0, XTERAX_MD_MAX_BYTES)
         : r.content;
     projectMemoryCache.set(workspaceRoot, { content, mtime: Date.now() });
     return content;
@@ -134,7 +134,7 @@ function stripInjectedBlocks(text: string): string {
     .replace(/<env>[\s\S]*?<\/env>/g, "")
     .replace(/<file [^>]*>[\s\S]*?<\/file>/g, "")
     .replace(/<selection[^>]*>[\s\S]*?<\/selection>/g, "")
-    .replace(/<terax-command[^>]*\/>/g, "")
+    .replace(/<xterax-command[^>]*\/>/g, "")
     .trim();
 }
 
@@ -153,11 +153,11 @@ type Deps = {
   getAgentPersona: () => { name: string; instructions: string } | null;
   getLive: () => LiveSnapshot;
   /**
-   * Stable project root — the directory Terax was opened in. Distinct
+   * Stable project root — the directory Xterax was opened in. Distinct
    * from `getLive().workspaceRoot` which follows the active terminal's
    * cwd. Used as the anchor for the engineering profile directory so
    * navigating between subdirectories via `cd` does not relocate the
-   * `.terax/` profile directory.
+   * `.xterax/` profile directory.
    */
   getProjectRoot?: () => string | null;
   getLmstudioBaseURL?: () => string | undefined;
@@ -192,7 +192,7 @@ export function createContextAwareTransport(deps: Deps) {
     const live = deps.getLive();
     // Resolve using current live context (follows active terminal) then
     // normalize to git root + anchor. This is what makes profile target the
-    // right project when the user is working in terax-ai (or any other
+    // right project when the user is working in xterax-ai (or any other
     // checkout) instead of whatever launchCwd was.
     const contextDir = deps.getProjectRoot?.() ?? live.workspaceRoot ?? null;
     const resolved = await resolveProfileProjectRoot(contextDir);
@@ -203,18 +203,18 @@ export function createContextAwareTransport(deps: Deps) {
         bootstrappedProjects.add(projectRoot);
         void startAgent(projectRoot);
       }
-      // Do not eagerly create .terax/ here. The skeleton and profile files are
+      // Do not eagerly create .xterax/ here. The skeleton and profile files are
       // created only when real preference signals are recorded (see recordSignal
       // + ensureBootstrap). This prevents littering incidental or short-lived
       // directories with the same initial profile data.
     }
     await observeForProfile(options.messages, projectRoot);
-    const projectMemory = await readTeraxMd(live.workspaceRoot);
+    const projectMemory = await readXteraxMd(live.workspaceRoot);
     const profileArtifacts = projectRoot
       ? await loadProfileArtifacts(projectRoot, 4000)
       : null;
-    // profileContent provides the raw .terax/profile.md (root + splits) as passive
-    // context in the stable system prompt, exactly like TERAX.md. This fulfills
+    // profileContent provides the raw .xterax/profile.md (root + splits) as passive
+    // context in the stable system prompt, exactly like XXTERAX.md. This fulfills
     // "provide the profile.md file as context" without requiring the chat agent
     // to use any learning tools or know the machinery.
     const profileContent = profileArtifacts?.rootBody ?? null;

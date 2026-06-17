@@ -1,23 +1,23 @@
 import { native } from "@/modules/ai/lib/native";
 
 /**
- * Lazily creates the .terax/ directory on first use.
+ * Lazily creates the .xterax/ directory on first use.
  *
  * The system must not pre-create a directory hierarchy. The minimum
  * required artifact is:
  *
- *   .terax/profile.md      (human-readable root profile)
+ *   .xterax/profile.md      (human-readable root profile)
  *
- * Domain subdirectories (.terax/<domain>/profile.md) are created
+ * Domain subdirectories (.xterax/<domain>/profile.md) are created
  * lazily by the refinement workflow when a domain's split thresholds
  * are met. They are never created here.
  *
- * Idempotent: safe to call on every signal. No-op if .terax/ already
+ * Idempotent: safe to call on every signal. No-op if .xterax/ already
  * exists.
  */
 export async function ensureBootstrap(workspaceRoot: string): Promise<boolean> {
   if (process.env.VITEST) return true;
-  const root = `${workspaceRoot.replace(/\/$/, "")}/.terax`;
+  const root = `${workspaceRoot.replace(/\/$/, "")}/.xterax`;
   try {
     await ensureDir(root);
   } catch {
@@ -34,12 +34,12 @@ export async function ensureBootstrap(workspaceRoot: string): Promise<boolean> {
 }
 
 export function bootstrapPath(workspaceRoot: string): string {
-  return `${workspaceRoot.replace(/\/$/, "")}/.terax`;
+  return `${workspaceRoot.replace(/\/$/, "")}/.xterax`;
 }
 
 export async function isBootstrapped(workspaceRoot: string): Promise<boolean> {
   if (process.env.VITEST) return true;
-  const root = `${workspaceRoot.replace(/\/$/, "")}/.terax`;
+  const root = `${workspaceRoot.replace(/\/$/, "")}/.xterax`;
   try {
     const res = await native.readFile(`${root}/profile.md`);
     return res.kind === "text";

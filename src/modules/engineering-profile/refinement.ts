@@ -482,7 +482,7 @@ export function buildDomainProfiles(
       priorSplit: priorDomain?.split ?? false,
     });
     const splitPath = shouldSplit
-      ? `.terax/${normalizeDomain(domain)}/profile.md`
+      ? `.xterax/${normalizeDomain(domain)}/profile.md`
       : null;
     out[domain] = {
       category: domain,

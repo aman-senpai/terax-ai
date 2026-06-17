@@ -108,10 +108,10 @@ export function useAiLiveBridge(params: Params) {
       getProjectRoot: () => {
         // Current context directory for the AI / profile system.
         // Profile code further resolves this via resolveProfileProjectRoot (git
-        // toplevel) + anchor so that .terax lives at repo roots and follows
+        // toplevel) + anchor so that .xterax lives at repo roots and follows
         // checkout switches without following every deep cd.
         // Also consider active editor's dir so profile follows where the user
-        // is actually working (e.g. editing in terax-ai while terminal cwd is elsewhere).
+        // is actually working (e.g. editing in xterax while terminal cwd is elsewhere).
         const { explorerRoot, launchCwd, home, activeId, tabs } = ref.current;
         const active = tabs.find((t) => t.id === activeId);
         let editorDir: string | null = null;
@@ -159,7 +159,7 @@ export function useAiLiveBridge(params: Params) {
           if (result !== "ready") {
             if (result === "timeout") {
               console.warn(
-                "[terax] Claude TUI did not appear in time; aborting prompt send",
+                "[xterax] Claude TUI did not appear in time; aborting prompt send",
               );
             }
             useManagedAgentsStore.getState().remove(leafId);

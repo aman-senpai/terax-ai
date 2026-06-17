@@ -14,5 +14,5 @@ fn main() {
         }
     }
 
-    terax_lib::run()
+    xterax_lib::run()
 }

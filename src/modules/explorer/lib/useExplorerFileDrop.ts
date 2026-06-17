@@ -83,7 +83,7 @@ export function useExplorerFileDrop({ rootPath, isDir, onCopied }: Options) {
         else unlisten = fn;
       })
       .catch((err) =>
-        console.error("[terax] explorer drop listen failed:", err),
+        console.error("[xterax] explorer drop listen failed:", err),
       );
 
     return () => {

@@ -554,13 +554,13 @@ function EmptyState({ onPick }: { onPick: (text: string) => void }) {
   return (
     <div className="flex flex-1 flex-col items-center px-8 py-6 text-center overflow-y-auto scrollbar-visible min-h-0 w-full">
       <div className="my-auto flex flex-col items-center gap-6 w-full">
-        <img src="/logo.png" alt="Terax" className="size-14 opacity-90" />
+        <img src="/logo.png" alt="Xterax" className="size-14 opacity-90" />
         <div className="space-y-1.5">
           <p className="text-[14px] font-semibold tracking-tight">
-            Ask Terax anything
+            Ask Xterax anything
           </p>
           <p className="max-w-[18rem] text-[11.5px] leading-relaxed text-muted-foreground">
-            Terax sees the active terminal — cwd, recent commands, and output.
+            Xterax sees the active terminal — cwd, recent commands, and output.
           </p>
         </div>
         <div className="flex w-full flex-col gap-2.5">

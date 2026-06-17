@@ -108,8 +108,8 @@ export function AiComposerProvider({ children }: ProviderProps) {
         void attachFileByPath(path);
       }
     };
-    window.addEventListener("terax:ai-attach-file", onAttach);
-    return () => window.removeEventListener("terax:ai-attach-file", onAttach);
+    window.addEventListener("xterax:ai-attach-file", onAttach);
+    return () => window.removeEventListener("xterax:ai-attach-file", onAttach);
     // attachFileByPath is stable for our purposes (closes over setFiles only)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -220,7 +220,7 @@ export function AiComposerProvider({ children }: ProviderProps) {
       return;
 
     // Slash-command interception. `/plan` toggles plan mode; `/init` rewrites
-    // the prompt to the TERAX.md scan template before sending.
+    // the prompt to the XTERAX.md scan template before sending.
     let effectiveText = trimmed;
     let commandMarker: string | null = null;
     let commandSource = trimmed;
@@ -241,7 +241,7 @@ export function AiComposerProvider({ children }: ProviderProps) {
       if (outcome.kind === "send-prompt") {
         effectiveText = outcome.prompt;
         if (outcome.commandName) {
-          commandMarker = `<terax-command name="${outcome.commandName}" />`;
+          commandMarker = `<xterax-command name="${outcome.commandName}" />`;
         }
       }
     }
@@ -310,7 +310,7 @@ export function AiComposerProvider({ children }: ProviderProps) {
       >[0]);
 
       // Resolve to the proper (git-root) project for this context so that
-      // preference signals and refinement target the .terax of the project
+      // preference signals and refinement target the .xterax of the project
       // the user is actually editing, not a stale launch dir.
       const { resolveProfileProjectRoot } = await import(
         "@/modules/engineering-profile/projectRoot"
@@ -409,7 +409,7 @@ function readAsDataURL(file: Blob): Promise<string> {
  * any explicit preference patterns ("I prefer X", "always use Y", "stop
  * using Z"). Refinement is handled by the learning agent after the turn.
  *
- * Fire-and-forget. The user sees no UI change; the .terax/profile.md
+ * Fire-and-forget. The user sees no UI change; the .xterax/profile.md
  * file gets updated on the next refinement tick.
  */
 async function observeSubmittedMessage(

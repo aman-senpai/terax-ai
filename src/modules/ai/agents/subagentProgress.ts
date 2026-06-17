@@ -26,7 +26,7 @@ export type PendingApproval = {
 //    finishSubagent would write to one `state` Map while getSubagentState
 //    reads from another, and getProgressVersion would return a version
 //    that never matches what notify() increments. ──────────────────────────
-const GLOBAL_KEY = "__terax_subagent_progress_store__";
+const GLOBAL_KEY = "__xterax_subagent_progress_store__";
 
 type GlobalStore = {
   bus: EventTarget;

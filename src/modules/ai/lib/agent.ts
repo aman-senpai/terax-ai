@@ -168,8 +168,8 @@ export async function buildLanguageModel(
         baseURL: "https://openrouter.ai/api/v1",
         apiKey: key,
         headers: {
-          "HTTP-Referer": "https://terax.ai",
-          "X-Title": "Terax",
+          "HTTP-Referer": "https://xterax.ai",
+          "X-Title": "Xterax",
         },
       })(resolvedModelId);
       break;
@@ -332,11 +332,11 @@ function buildStableSystem(
     : "";
   const memoryBlock =
     projectMemory && projectMemory.trim().length > 0
-      ? `\n\n## PROJECT — TERAX.md\n${projectMemory.trim()}`
+      ? `\n\n## PROJECT — XTERAX.md\n${projectMemory.trim()}`
       : "";
   const profileBlock =
     profileContent && profileContent.trim().length > 0
-      ? `\n\n## PROJECT PROFILE — .terax/profile.md\n${profileContent.trim()}`
+      ? `\n\n## PROJECT PROFILE — .xterax/profile.md\n${profileContent.trim()}`
       : "";
   return `${base}${memoryBlock}${profileBlock}${personaBlock}${customBlock}`;
 }

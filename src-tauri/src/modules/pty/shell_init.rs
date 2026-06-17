@@ -18,7 +18,7 @@ const ZSHRC_SCRIPT: &str = include_str!("scripts/zshrc.zsh");
 const FISH_INIT_SCRIPT: &str = include_str!("scripts/init.fish");
 #[cfg(unix)]
 const FISH_REINSTALL_PROMPT: &str =
-    "functions -q __terax_install_prompt; and __terax_install_prompt";
+    "functions -q __xterax_install_prompt; and __xterax_install_prompt";
 
 #[cfg(windows)]
 fn bashrc_script() -> &'static str {
@@ -105,9 +105,9 @@ fn ensure_utf8_locale(cmd: &mut CommandBuilder) {
 fn apply_common(cmd: &mut CommandBuilder, cwd: Option<String>, blocks: bool) {
     cmd.env("TERM", "xterm-256color");
     cmd.env("COLORTERM", "truecolor");
-    cmd.env("TERAX_TERMINAL", "1");
+    cmd.env("XTERAX_TERMINAL", "1");
     if blocks {
-        cmd.env("TERAX_BLOCKS", "1");
+        cmd.env("XTERAX_BLOCKS", "1");
     }
     for (key, value) in workspace::appimage_env_overrides() {
         match value {
@@ -200,10 +200,10 @@ mod unix {
             Shell::Zsh => {
                 match prepare_zdotdir() {
                     Ok(zdotdir) => {
-                        // Guard against Terax-in-Terax :)
+                        // Guard against Xterax-in-Xterax :)
                         if let Ok(user_zd) = std::env::var("ZDOTDIR") {
                             if Path::new(&user_zd) != zdotdir.as_path() {
-                                cmd.env("TERAX_USER_ZDOTDIR", user_zd);
+                                cmd.env("XTERAX_USER_ZDOTDIR", user_zd);
                             }
                         }
                         cmd.env("ZDOTDIR", &zdotdir);
@@ -255,7 +255,7 @@ mod unix {
 
     fn integration_root() -> Result<PathBuf, String> {
         let home = dirs::home_dir().ok_or_else(|| "could not resolve home dir".to_string())?;
-        let root = home.join(".cache").join("terax").join("shell-integration");
+        let root = home.join(".cache").join("xterax").join("shell-integration");
         fs::create_dir_all(&root).map_err(|e| format!("create {}: {e}", root.display()))?;
         Ok(root)
     }
@@ -282,7 +282,7 @@ mod unix {
         let home = dirs::home_dir().ok_or_else(|| "could not resolve home dir".to_string())?;
         let dir = home.join(".config").join("fish").join("conf.d");
         fs::create_dir_all(&dir).map_err(|e| format!("create {}: {e}", dir.display()))?;
-        write_if_changed(&dir.join("terax.fish"), FISH_INIT)?;
+        write_if_changed(&dir.join("xterax.fish"), FISH_INIT)?;
         Ok(())
     }
 
@@ -294,7 +294,7 @@ mod unix {
         }
         // Atomic replace: a parallel shell startup must never source a half-written file.
         let mut tmp: OsString = path.as_os_str().to_owned();
-        tmp.push(".__terax_tmp__");
+        tmp.push(".__xterax_tmp__");
         let tmp = PathBuf::from(tmp);
         fs::write(&tmp, content).map_err(|e| format!("write {}: {e}", tmp.display()))?;
         fs::rename(&tmp, path).map_err(|e| {
@@ -452,7 +452,7 @@ mod windows {
         }
         cmd.env("TERM", "xterm-256color");
         cmd.env("COLORTERM", "truecolor");
-        cmd.env("TERAX_TERMINAL", "1");
+        cmd.env("XTERAX_TERMINAL", "1");
         super::ensure_utf8_locale(&mut cmd);
         log::info!("spawning WSL shell: {distro} ({shell_path})");
         Ok(cmd)
@@ -482,7 +482,7 @@ mod windows {
             ) => {
                 args.push("env".to_string());
                 if let Some(user_zdotdir) = user_zdotdir {
-                    args.push(format!("TERAX_USER_ZDOTDIR={user_zdotdir}"));
+                    args.push(format!("XTERAX_USER_ZDOTDIR={user_zdotdir}"));
                 }
                 args.push(format!("ZDOTDIR={zdotdir}"));
                 args.push(shell_path.to_string());
@@ -529,7 +529,7 @@ mod windows {
     fn prepare_wsl_integration_dir(distro: &str, shell: &str) -> Result<(String, PathBuf), String> {
         let home = crate::modules::workspace::wsl_home(distro.to_string())?;
         let linux_dir = format!(
-            "{}/.cache/terax/shell-integration/{shell}",
+            "{}/.cache/xterax/shell-integration/{shell}",
             home.trim_end_matches('/')
         );
         let unc_dir = crate::modules::workspace::wsl_path_to_unc(distro, &linux_dir);
@@ -576,7 +576,7 @@ mod windows {
         let linux_dir = format!("{}/.config/fish/conf.d", home.trim_end_matches('/'));
         let unc_dir = crate::modules::workspace::wsl_path_to_unc(distro, &linux_dir);
         fs::create_dir_all(&unc_dir).map_err(|e| format!("create {}: {e}", unc_dir.display()))?;
-        let unc_file = unc_dir.join("terax.fish");
+        let unc_file = unc_dir.join("xterax.fish");
         let content = normalize_script(super::fish_init_script());
         write_if_changed(&unc_file, &content)?;
         Ok(())
@@ -584,7 +584,7 @@ mod windows {
 
     fn integration_root() -> Result<PathBuf, String> {
         let home = dirs::home_dir().ok_or_else(|| "could not resolve home dir".to_string())?;
-        let root = home.join(".cache").join("terax").join("shell-integration");
+        let root = home.join(".cache").join("xterax").join("shell-integration");
         fs::create_dir_all(&root).map_err(|e| format!("create {}: {e}", root.display()))?;
         Ok(root)
     }
@@ -604,7 +604,7 @@ mod windows {
             }
         }
         let mut tmp: OsString = path.as_os_str().to_owned();
-        tmp.push(".__terax_tmp__");
+        tmp.push(".__xterax_tmp__");
         let tmp = PathBuf::from(tmp);
         fs::write(&tmp, content).map_err(|e| format!("write {}: {e}", tmp.display()))?;
         fs::rename(&tmp, path).map_err(|e| {
@@ -625,7 +625,7 @@ mod windows {
                 "/usr/bin/zsh",
                 ShellKind::Zsh,
                 WslShellIntegration::Zsh {
-                    zdotdir: "/home/vinicios/.cache/terax/shell-integration/zsh".into(),
+                    zdotdir: "/home/vinicios/.cache/xterax/shell-integration/zsh".into(),
                     user_zdotdir: None,
                 },
             );
@@ -638,7 +638,7 @@ mod windows {
                     "/home/vinicios/repo".to_string(),
                     "--exec".to_string(),
                     "env".to_string(),
-                    "ZDOTDIR=/home/vinicios/.cache/terax/shell-integration/zsh".to_string(),
+                    "ZDOTDIR=/home/vinicios/.cache/xterax/shell-integration/zsh".to_string(),
                     "/usr/bin/zsh".to_string(),
                     "-l".to_string(),
                 ]
@@ -653,7 +653,7 @@ mod windows {
                 "/usr/bin/zsh",
                 ShellKind::Zsh,
                 WslShellIntegration::Zsh {
-                    zdotdir: "/home/vinicios/.cache/terax/shell-integration/zsh".into(),
+                    zdotdir: "/home/vinicios/.cache/xterax/shell-integration/zsh".into(),
                     user_zdotdir: Some("/home/vinicios/.config/zsh".into()),
                 },
             );
@@ -666,8 +666,8 @@ mod windows {
                     "/home/vinicios/repo".to_string(),
                     "--exec".to_string(),
                     "env".to_string(),
-                    "TERAX_USER_ZDOTDIR=/home/vinicios/.config/zsh".to_string(),
-                    "ZDOTDIR=/home/vinicios/.cache/terax/shell-integration/zsh".to_string(),
+                    "XTERAX_USER_ZDOTDIR=/home/vinicios/.config/zsh".to_string(),
+                    "ZDOTDIR=/home/vinicios/.cache/xterax/shell-integration/zsh".to_string(),
                     "/usr/bin/zsh".to_string(),
                     "-l".to_string(),
                 ]
@@ -705,7 +705,7 @@ mod windows {
                 "/bin/bash",
                 ShellKind::Bash,
                 WslShellIntegration::Bash {
-                    rcfile: "/home/vinicios/.cache/terax/shell-integration/bash/bashrc".into(),
+                    rcfile: "/home/vinicios/.cache/xterax/shell-integration/bash/bashrc".into(),
                 },
             );
             assert_eq!(
@@ -718,7 +718,7 @@ mod windows {
                     "--exec".to_string(),
                     "/bin/bash".to_string(),
                     "--rcfile".to_string(),
-                    "/home/vinicios/.cache/terax/shell-integration/bash/bashrc".to_string(),
+                    "/home/vinicios/.cache/xterax/shell-integration/bash/bashrc".to_string(),
                     "-i".to_string(),
                 ]
             );

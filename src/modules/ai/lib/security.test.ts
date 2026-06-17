@@ -109,18 +109,18 @@ describe("checkReadable — protected directories", () => {
     expect(checkWritable("c:/PROGRAM FILES/x")).toMatchObject({ ok: false });
   });
 
-  it("rejects writes under .terax (protected for autonomous learning)", () => {
-    expect(checkWritable("/home/me/project/.terax/profile.md")).toMatchObject({
+  it("rejects writes under .xterax (protected for autonomous learning)", () => {
+    expect(checkWritable("/home/me/project/.xterax/profile.md")).toMatchObject({
       ok: false,
     });
-    expect(checkWritable("/Users/me/terax-ai/.terax/design/profile.md")).toMatchObject({
+    expect(checkWritable("/Users/me/xterax-ai/.xterax/design/profile.md")).toMatchObject({
       ok: false,
     });
-    expect(checkWritable(".terax/foo")).toMatchObject({ ok: false });
+    expect(checkWritable(".xterax/foo")).toMatchObject({ ok: false });
   });
 
-  it("allows reads of .terax (profile is injectable context) but blocks writes", () => {
-    expect(checkReadable("/home/me/project/.terax/profile.md")).toMatchObject({
+  it("allows reads of .xterax (profile is injectable context) but blocks writes", () => {
+    expect(checkReadable("/home/me/project/.xterax/profile.md")).toMatchObject({
       ok: true,
     });
   });

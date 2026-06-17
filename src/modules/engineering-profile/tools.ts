@@ -226,7 +226,7 @@ export function buildProfileTools(ctx: ToolContext) {
       execute: async (input) => {
         const liveState = useChatStore.getState().live;
         // Collect multiple candidates for current context to avoid stale launch/previous
-        // root (e.g. resume) when user/agent is working in terax-ai.
+        // root (e.g. resume) when user/agent is working in xterax.
         // Prefer active editor file dir (if editing in the project), cwd, workspace/project.
         const activeFile = liveState.getActiveFile?.();
         const fileDir = activeFile

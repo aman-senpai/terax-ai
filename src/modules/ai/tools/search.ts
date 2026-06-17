@@ -101,7 +101,7 @@ export function buildSearchTools(ctx: ToolContext) {
 
     glob: tool({
       description:
-        'Find files by path pattern (gitignore-aware). Use over `list_directory` when you want all matches recursively. Patterns use globset syntax: `**/*.ts`, `src/**/test_*.py`. Returns up to `max_results` matches. For hidden directories like .terax, use list_directory(".terax") or pattern ".terax/**" — leading-dot paths are supported.',
+        'Find files by path pattern (gitignore-aware). Use over `list_directory` when you want all matches recursively. Patterns use globset syntax: `**/*.ts`, `src/**/test_*.py`. Returns up to `max_results` matches. For hidden directories like .xterax, use list_directory(".xterax") or pattern ".xterax/**" — leading-dot paths are supported.',
       inputSchema: z.object({
         pattern: z.string().describe("Glob pattern over relative paths."),
         root: z.string().optional(),

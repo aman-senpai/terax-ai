@@ -4,7 +4,7 @@ export type ToolContext = {
   /** Workspace root (explorer root). Used by tools that operate over the project. */
   getWorkspaceRoot: () => string | null;
   /**
-   * Stable project root — the directory Terax was opened in. Distinct
+   * Stable project root — the directory Xterax was opened in. Distinct
    * from getWorkspaceRoot which follows the active terminal's cwd.
    * Used by the engineering profile and project-scope signal recorders
    * to anchor state to the project, not the current subdirectory.

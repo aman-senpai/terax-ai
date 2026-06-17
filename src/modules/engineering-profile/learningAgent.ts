@@ -3,7 +3,7 @@
  *
  * Runs in its own loop, completely separate from the main chat agent
  * and from any subagents. The chat agent and subagents do NOT see this
- * code; they are consumers of the resulting .terax/profile.md, not
+ * code; they are consumers of the resulting .xterax/profile.md, not
  * participants in the learning process.
  *
  * The agent observes:
@@ -22,7 +22,7 @@
  *     preference candidates
  *   - running refinement to merge candidates into confidence-scored
  *     preferences and decide on domain splits
- *   - writing .terax/profile.md (and split subdirectory files) without approval
+ *   - writing .xterax/profile.md (and split subdirectory files) without approval
  *   - updating the engine's self-state (which sources of signal are
  *     yielding the most reliable preferences, so future extraction
  *     weights them higher)
@@ -295,8 +295,8 @@ export function notifyUserMessageSent(projectRootOverride?: string | null): void
 
 export function notifyUserFileEdit(filePath: string, summary: string): void {
   const isProfileFile =
-    filePath.endsWith("/.terax/profile.md") ||
-    filePath.includes("/.terax/");  // catch any file inside .terax/ (root + domain split profiles) for self-write guards
+    filePath.endsWith("/.xterax/profile.md") ||
+    filePath.includes("/.xterax/");  // catch any file inside .xterax/ (root + domain split profiles) for self-write guards
   if (isProfileFile) {
     if (projectRoot) {
       void import("./storage").then(async (m) => {

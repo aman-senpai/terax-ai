@@ -46,7 +46,7 @@ vi.mock("./refinement", () => ({
 vi.mock("./bootstrap", () => ({
   ensureBootstrap: vi.fn(async () => true),
   isBootstrapped: vi.fn(async () => true),
-  bootstrapPath: (root: string) => `${root}/.terax`,
+  bootstrapPath: (root: string) => `${root}/.xterax`,
 }));
 
 vi.mock("./storage", () => {

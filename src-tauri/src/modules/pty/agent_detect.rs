@@ -8,7 +8,10 @@ const OSC_MAX: usize = 2048;
 const DEFAULT_AGENTS: &[&str] = &["claude", "codex"];
 
 // OSC 777 marker our Claude Code hooks emit via `terminalSequence`.
-const TERAX_MARKER: &[u8] = b"notify;Terax;";
+const MARKERS: &[&[u8]] = &[
+    b"notify;Xterax;",
+    b"xterax;notify",
+];
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum State {
@@ -160,7 +163,14 @@ impl AgentDetector {
     }
 
     fn handle_osc777<F: FnMut(Transition)>(&mut self, pt: &[u8], emit: &mut F) {
-        if let Some(event) = pt.strip_prefix(TERAX_MARKER) {
+        let mut event: Option<&[u8]> = None;
+        for m in MARKERS {
+            if let Some(e) = pt.strip_prefix(*m) {
+                event = Some(e);
+                break;
+            }
+        }
+        if let Some(event) = event {
             // Self-arms so notifications work even when no shell preexec fired
             // (bash, Windows, tmux, wrappers).
             match event {
@@ -307,20 +317,22 @@ mod tests {
     }
 
     #[test]
-    fn terax_marker_drives_status() {
+    fn xterax_marker_drives_status() {
         let mut d = AgentDetector::new();
         run(&mut d, &osc("133;C;claude"));
-        assert_eq!(run(&mut d, &osc("777;notify;Terax;attention")), vec![Transition::Attention]);
-        assert_eq!(run(&mut d, &osc("777;notify;Terax;working")), vec![Transition::Working]);
-        assert!(run(&mut d, &osc("777;notify;Terax;working")).is_empty());
-        assert_eq!(run(&mut d, &osc("777;notify;Terax;finished")), vec![Transition::Finished]);
+        assert_eq!(run(&mut d, &osc("777;notify;Xterax;attention")), vec![Transition::Attention]);
+        assert_eq!(run(&mut d, &osc("777;notify;Xterax;working")), vec![Transition::Working]);
+        assert!(run(&mut d, &osc("777;notify;Xterax;working")).is_empty());
+        assert_eq!(run(&mut d, &osc("777;notify;Xterax;finished")), vec![Transition::Finished]);
     }
 
+
+
     #[test]
-    fn terax_marker_auto_arms_without_preexec() {
+    fn xterax_marker_auto_arms_without_preexec() {
         let mut d = AgentDetector::new();
         assert_eq!(
-            run(&mut d, &osc("777;notify;Terax;attention")),
+            run(&mut d, &osc("777;notify;Xterax;attention")),
             vec![started("claude"), Transition::Attention]
         );
     }
@@ -383,6 +395,6 @@ mod tests {
         seq.extend(std::iter::repeat_n(b'x', OSC_MAX + 100));
         seq.extend_from_slice(&[ESC, ST_FINAL]);
         assert!(run(&mut d, &seq).is_empty());
-        assert_eq!(run(&mut d, &osc("777;notify;Terax;attention")), vec![Transition::Attention]);
+        assert_eq!(run(&mut d, &osc("777;notify;Xterax;attention")), vec![Transition::Attention]);
     }
 }

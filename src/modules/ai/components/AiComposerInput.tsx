@@ -530,7 +530,7 @@ export function AiComposerInput() {
                 className="pointer-events-none absolute left-0 right-8 top-0 text-[13px] leading-relaxed text-muted-foreground/60 select-none truncate"
                 aria-hidden
               >
-                Ask Terax anything — # for snippets, @ for files
+                Ask Xterax anything — # for snippets, @ for files
               </span>
             )}
 
@@ -633,7 +633,7 @@ export function AiComposerInput() {
       </Popover>
 
       {voiceRow.mounted && (
-        <div data-state={voiceRow.state} className="terax-reveal">
+        <div data-state={voiceRow.state} className="xterax-reveal">
           <div className="flex items-center gap-1.5 px-1 text-[11px] text-muted-foreground">
             {c.voice.recording ? (
               <span className="size-1.5 animate-pulse rounded-full bg-destructive" />

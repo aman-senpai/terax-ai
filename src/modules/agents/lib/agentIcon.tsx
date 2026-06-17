@@ -22,7 +22,7 @@ export function AgentIcon({
   size?: number;
   className?: string;
 }) {
-  if (agent.toLowerCase().includes("terax")) {
+  if (agent.toLowerCase().includes("xterax")) {
     return (
       <img
         src="/logo.png"

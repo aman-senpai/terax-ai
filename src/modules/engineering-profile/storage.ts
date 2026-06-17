@@ -11,7 +11,7 @@ import {
   type SignalSource,
 } from "./types";
 
-const STORE_PATH = "terax-engineering-profile.json";
+const STORE_PATH = "xterax-engineering-profile.json";
 
 const KEY_USER_PROFILE = "user.profile";
 const KEY_PROJECT_PROFILE_PREFIX = "project.profile:";
@@ -43,7 +43,7 @@ let fsMirrorDisabled = false;
 let fsMirrorWarned = false;
 let fsMirrorEnabled = false;
 
-// To prevent feedback loops where our own writes to .terax/profile.md (and split profiles)
+// To prevent feedback loops where our own writes to .xterax/profile.md (and split profiles)
 // trigger Rust fs watchers → listenFsChanged → handlePaths → notifyUserFileEdit → syncProfileFromDisk
 // which then writes again. We note the time of our writes; notifyUserFileEdit for profile paths
 // within a short window after a self-write will skip the sync.
@@ -58,7 +58,7 @@ export function getLastProfileSelfWrite(): number {
 }
 
 async function ensureFsMirrorRoot(workspaceRoot: string): Promise<string> {
-  return `${workspaceRoot.replace(/\/$/, "")}/.terax`;
+  return `${workspaceRoot.replace(/\/$/, "")}/.xterax`;
 }
 
 function newId(prefix: string): string {
@@ -96,7 +96,7 @@ function projectSnapshotsKey(root: string): string {
 export async function projectMirrorExists(projectRoot: string): Promise<boolean> {
   if (process.env.VITEST) return true; // tests manage their own data/mocks
   if (!projectRoot) return false;
-  const jsonPath = `${projectRoot.replace(/\/$/, "")}/.terax/profile.json`;
+  const jsonPath = `${projectRoot.replace(/\/$/, "")}/.xterax/profile.json`;
   try {
     const res = await native.readFile(jsonPath);
     return res.kind === "text";
@@ -122,7 +122,7 @@ export async function clearProjectData(projectRoot: string): Promise<void> {
       await store.set(KEY_PROJECT_PROFILE_BY_ROOT, map);
     }
   } catch (e) {
-    console.warn("[engineering-profile] failed to clear store data on .terax delete:", e);
+    console.warn("[engineering-profile] failed to clear store data on .xterax delete:", e);
   }
 }
 
@@ -159,7 +159,7 @@ export const storage: Stored = {
       return (await store.get<Profile>(KEY_USER_PROFILE)) ?? null;
     }
     if (!projectRoot) return null;
-    // If the user deleted the project's .terax/ directory, treat it as a full reset:
+    // If the user deleted the project's .xterax/ directory, treat it as a full reset:
     // nuke the corresponding data in the global store so the next trigger starts fresh
     // (blank profile, no old signals, no history snapshots brought back).
     if (!(await projectMirrorExists(projectRoot))) {
@@ -311,7 +311,7 @@ export const storage: Stored = {
       (await store.get<Record<string, Profile>>(KEY_PROJECT_PROFILE_BY_ROOT)) ??
       {};
     const entries = Object.entries(map);
-    // Drop any entries whose .terax/ mirror has been deleted by the user.
+    // Drop any entries whose .xterax/ mirror has been deleted by the user.
     // This makes "delete the dir = permanent reset" complete; the project
     // will no longer appear in listings until new activity creates fresh data.
     const valid: { root: string; profile: Profile }[] = [];
@@ -336,7 +336,7 @@ async function writeHumanViewImpl(profile: Profile): Promise<void> {
   const workspaceRoot = profile.projectRoot;
   if (!workspaceRoot) return;
 
-  // If the user deleted the .terax/ directory, clear any globally stored data
+  // If the user deleted the .xterax/ directory, clear any globally stored data
   // for this project *first*. This ensures the next write (and any future
   // triggers) starts from a true blank canvas instead of resurrecting old
   // profiles, signals, or history snapshots from the global store.
@@ -351,7 +351,7 @@ async function writeHumanViewImpl(profile: Profile): Promise<void> {
 
   // Write the pure profile for this scope/root.
   // Do NOT merge global user preferences here — that was causing the same
-  // learned taste to be copied into .terax/ of every project, polluting
+  // learned taste to be copied into .xterax/ of every project, polluting
   // per-project learning and defeating project-level isolation.
   // Merging (if desired for effective context) happens in getMergedProfile /
   // buildContextPackage at runtime.
@@ -476,7 +476,7 @@ function renderPreferenceLine(p: Preference): string {
 }
 
 export async function syncProfileFromDisk(projectRoot: string): Promise<void> {
-  const rootMdPath = `${projectRoot.replace(/\/$/, "")}/.terax/profile.md`;
+  const rootMdPath = `${projectRoot.replace(/\/$/, "")}/.xterax/profile.md`;
   let rootMd: string | null = null;
   try {
     const r = await native.readFile(rootMdPath);
@@ -494,7 +494,7 @@ export async function syncProfileFromDisk(projectRoot: string): Promise<void> {
 
   for (const parsedPref of parsed.preferences) {
     // Prevent duplicates in parsed preferences (exact normalized match only; no fuzzy/similarity).
-    // Manual edits to .terax/*.md are the source of truth for pinning/text; LLM refinement will
+    // Manual edits to .xterax/*.md are the source of truth for pinning/text; LLM refinement will
     // re-consolidate on next pass.
     const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, " ");
     const duplicate = updatedPrefs.find(
@@ -633,7 +633,7 @@ async function parseProfileMarkdown(
     if (trimmed.startsWith("# ")) {
       const heading = trimmed.slice(2).trim();
       const cleanHeading = heading
-        .replace(/\s*\(Continuously Learned by Terax\)/i, "")
+        .replace(/\s*\(Continuously Learned by Xterax\)/i, "")
         .replace(/^Taste\s*[-—]?\s*/i, "")
         .trim();
       const lower = cleanHeading.toLowerCase();

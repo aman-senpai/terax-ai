@@ -16,8 +16,8 @@ function terminalTab(over: Partial<TerminalTab> = {}): TerminalTab {
 
 describe("labelFor (terminal tabs)", () => {
   it("derives the label from the last cwd segment", () => {
-    expect(labelFor(terminalTab({ cwd: "/Users/me/projects/terax-ai" }))).toBe(
-      "terax-ai",
+    expect(labelFor(terminalTab({ cwd: "/Users/me/projects/xterax-ai" }))).toBe(
+      "xterax-ai",
     );
   });
 
@@ -29,7 +29,7 @@ describe("labelFor (terminal tabs)", () => {
     expect(
       labelFor(
         terminalTab({
-          cwd: "/Users/me/projects/terax-ai",
+          cwd: "/Users/me/projects/xterax-ai",
           customTitle: "Server",
         }),
       ),

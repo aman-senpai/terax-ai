@@ -29,10 +29,10 @@ export { resolvePath, type ToolContext } from "./context";
  * outside that.
  *
  * Note: Continuous learning / engineering profile (signal collection,
- * refinement, .terax/profile.md maintenance) is fully separated. It runs in
+ * refinement, .xterax/profile.md maintenance) is fully separated. It runs in
  * the background via passive observation and the autonomous learning agent.
  * The main chat agent is unaware and receives taste only via passive context
- * injection (similar to TERAX.md).
+ * injection (similar to XTERAX.md).
  */
 export function buildTools(ctx: import("./context").ToolContext) {
   return {

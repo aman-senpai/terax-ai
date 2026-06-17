@@ -44,7 +44,7 @@ const PREFERENCE_MAX_LEN = 280;
  * refinement later aggregates into a confidence-scored preference.
  *
  * On the first project-scoped signal in a workspace, this also
- * bootstraps the .terax/ directory structure.
+ * bootstraps the .xterax/ directory structure.
  */
 export async function recordSignal(
   input: RecordSignalInput,
@@ -80,8 +80,8 @@ export async function recordSignal(
   };
   if (projectRoot) {
     // Before (re)creating the mirror, check if it was missing. If the user
-    // deleted .terax/, this is a reset signal: clear global store data first
-    // so we start the new .terax/ from a true blank canvas.
+    // deleted .xterax/, this is a reset signal: clear global store data first
+    // so we start the new .xterax/ from a true blank canvas.
     if (!(await projectMirrorExists(projectRoot))) {
       await clearProjectData(projectRoot);
     }

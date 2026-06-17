@@ -115,9 +115,9 @@ export type DomainProfile = {
   preferences: Preference[];
   updatedAt: number;
   /**
-   * Whether this domain has been split into its own .terax/<domain>/
+   * Whether this domain has been split into its own .xterax/<domain>/
    * subdirectory. When true, the root profile.md contains a short
-   * reference ("See .terax/<domain>/profile.md") and the full list
+   * reference ("See .xterax/<domain>/profile.md") and the full list
    * lives in the subdirectory file. Refinement decides this based on
    * the configured split thresholds.
    */
@@ -125,7 +125,7 @@ export type DomainProfile = {
   /**
    * The on-disk path to the split subdirectory file, relative to the
    * project root. Only set when `split` is true. Format:
-   * ".terax/<domain>/profile.md" with the domain slug normalized.
+   * ".xterax/<domain>/profile.md" with the domain slug normalized.
    */
   splitPath: string | null;
 };
@@ -179,7 +179,7 @@ export type RefinementProvider =
   | "mlx"
   | "ollama";
 
-import { type ThinkingLevel } from "@/modules/ai/lib/thinking";
+import type { ThinkingLevel } from "@/modules/ai/lib/thinking";
 
 export type RefinementConfig = {
   provider: RefinementProvider;
@@ -193,7 +193,7 @@ export type RefinementConfig = {
   maxPreferences: number;
   /**
    * Domain-split thresholds. A domain is split into its own
-   * .terax/<domain>/profile.md when ALL of these are met:
+   * .xterax/<domain>/profile.md when ALL of these are met:
    *   - preference count >= splitMinPreferences
    *   - average confidence >= splitMinAverageConfidence
    *   - share of total profile >= splitMinShare

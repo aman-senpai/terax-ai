@@ -82,7 +82,7 @@ export async function loadProfiles(
 /**
  * Loads the on-disk profile artifacts. The agent always reads the root
  * `profile.md` first; split domains (if any) are discovered by scanning
- * for "- See .terax/<domain>/profile.md" references inside the root md.
+ * for "- See .xterax/<domain>/profile.md" references inside the root md.
  *
  * Returns the concatenated markdown, token-bounded.
  */
@@ -103,7 +103,7 @@ export async function loadProfileArtifacts(
       totalTokens: 0,
     };
   }
-  const rootMdPath = `${workspaceRoot.replace(/\/$/, "")}/.terax/profile.md`;
+  const rootMdPath = `${workspaceRoot.replace(/\/$/, "")}/.xterax/profile.md`;
   const rootBody = await readTextFile(rootMdPath);
   if (rootBody === null) {
     return {
@@ -121,7 +121,7 @@ export async function loadProfileArtifacts(
   let m: RegExpExecArray | null;
   while ((m = seeRe.exec(rootBody)) !== null) {
     const p = m[1];
-    if (p.startsWith(".terax/") || p.includes("/.terax/")) {
+    if (p.startsWith(".xterax/") || p.includes("/.xterax/")) {
       splitPaths.push(p);
     }
   }

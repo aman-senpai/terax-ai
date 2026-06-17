@@ -117,7 +117,7 @@ const WRITE_DENY_PREFIXES = [
   "/bin/",
   "/sbin/",
   "/boot/",
-  // ( .terax handled with special anywhere-dir logic below, not root-prefix )
+  // ( .xterax handled with special anywhere-dir logic below, not root-prefix )
   // Windows (post drive-strip + lowercase). Note: these block writes to the
   // system drive's Windows / Program Files. Drives are stripped, so any
   // /windows/... etc. matches regardless of drive letter.
@@ -236,14 +236,14 @@ export function checkWritable(path: string): SafetyResult {
 
   const cmp = comparisonForm(path);
 
-  // .terax anywhere (absolute or relative, any depth) is protected from writes
+  // .xterax anywhere (absolute or relative, any depth) is protected from writes
   // (reads allowed for inspection of the injected profile). This keeps the
   // autonomous learning independent, precise and maintainable.
-  if (/(^|\/)\.terax(\/|$)/.test(cmp)) {
+  if (/(^|\/)\.xterax(\/|$)/.test(cmp)) {
     return {
       ok: false,
       reason:
-        "Refused: modifications to .terax/ are not allowed (reserved exclusively for the autonomous profile-learning system).",
+        "Refused: modifications to .xterax/ are not allowed (reserved exclusively for the autonomous profile-learning system).",
     };
   }
 
@@ -391,11 +391,11 @@ export function checkShellCommand(cmd: string): SafetyResult {
     return { ok: false, reason: "Refused: --no-preserve-root is not allowed." };
   }
 
-  // Block any shell mutation targeting .terax/ (autonomous learning must remain
+  // Block any shell mutation targeting .xterax/ (autonomous learning must remain
   // independent and protected from main agent + subagents). This is in addition
   // to the fs/edit path checks (which also catch via isUnderProtected logic).
   if (
-    /(^|\/|\s)\.terax(?:[\/\\ ]|$)/i.test(c) &&
+    /(^|\/|\s)\.xterax(?:[/\\ ]|$)/i.test(c) &&
     /\b(?:rm|mv|cp|mkdir|touch|truncate|dd\b[^|]*\bof=)|\b(?:echo|cat|printf)\b[^|;]*>|\b(?:sed|perl)\s+-i\b|>>/i.test(
       c,
     )
@@ -403,7 +403,7 @@ export function checkShellCommand(cmd: string): SafetyResult {
     return {
       ok: false,
       reason:
-        "Refused: shell commands that modify .terax/ are not allowed (the directory is reserved exclusively for the autonomous profile-learning system).",
+        "Refused: shell commands that modify .xterax/ are not allowed (the directory is reserved exclusively for the autonomous profile-learning system).",
     };
   }
   // dd to a raw disk device
