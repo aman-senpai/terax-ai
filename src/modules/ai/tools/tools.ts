@@ -1,7 +1,6 @@
 import { buildManagedAgentTools } from "./agent";
 import { buildEditTools } from "./edit";
 import { buildFsTools } from "./fs";
-import { buildProfileTools } from "@/modules/engineering-profile/tools";
 import { buildSearchTools } from "./search";
 import { buildShellTools } from "./shell";
 import { buildSubagentTools } from "./subagent";
@@ -24,21 +23,16 @@ export { resolvePath, type ToolContext } from "./context";
  *  - `edit` / `multi_edit` additionally enforce a read-before-edit invariant
  *    (the model must have called read_file on the path earlier in the
  *    session).
- *  - Engineering Profile tools (`record_preference_signal`,
- *    `record_preference_signal`, `record_rejection_signal`,
- *    `refine_profile`, `set_refinement_config`) auto-execute because the
- *    continuous-learning agent owns the profile and updates it
- *    autonomously — the same way the chat agent's own memory of the user
- *    evolves.
- *  - `rollback_profile` requires explicit user approval because it is a
- *    destructive action against history.
- *  - Engineering Profile read tools (`get_profile`, `explain_preference`,
- *    `show_profile_history`, `show_signals`, `list_project_profiles`)
- *    auto-execute.
  *
  * The model sees absolute paths only after they are resolved against the
  * active terminal's cwd (provided via `getCwd`); it should not invent paths
  * outside that.
+ *
+ * Note: Continuous learning / engineering profile (signal collection,
+ * refinement, .terax/profile.md maintenance) is fully separated. It runs in
+ * the background via passive observation and the autonomous learning agent.
+ * The main chat agent is unaware and receives taste only via passive context
+ * injection (similar to TERAX.md).
  */
 export function buildTools(ctx: import("./context").ToolContext) {
   return {
@@ -50,7 +44,6 @@ export function buildTools(ctx: import("./context").ToolContext) {
     ...buildTerminalTools(ctx),
     ...buildTodoTools(ctx),
     ...buildManagedAgentTools(ctx),
-    ...buildProfileTools(ctx),
   } as const;
 }
 

@@ -109,6 +109,22 @@ describe("checkReadable — protected directories", () => {
     expect(checkWritable("c:/PROGRAM FILES/x")).toMatchObject({ ok: false });
   });
 
+  it("rejects writes under .terax (protected for autonomous learning)", () => {
+    expect(checkWritable("/home/me/project/.terax/profile.md")).toMatchObject({
+      ok: false,
+    });
+    expect(checkWritable("/Users/me/terax-ai/.terax/history/snap.json")).toMatchObject({
+      ok: false,
+    });
+    expect(checkWritable(".terax/foo")).toMatchObject({ ok: false });
+  });
+
+  it("allows reads of .terax (profile is injectable context) but blocks writes", () => {
+    expect(checkReadable("/home/me/project/.terax/profile.md")).toMatchObject({
+      ok: true,
+    });
+  });
+
   it("allows reads in user directories not under any protected dir", () => {
     expect(checkReadable("/home/me/Documents/notes.txt")).toMatchObject({
       ok: true,

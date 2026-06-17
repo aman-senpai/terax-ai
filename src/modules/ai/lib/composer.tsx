@@ -1,12 +1,12 @@
+import { observeUserMessage } from "@/modules/engineering-profile/observer";
+import { currentWorkspaceEnv } from "@/modules/workspace";
 import { invoke } from "@tauri-apps/api/core";
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { useWhisperRecording } from "../hooks/useWhisperRecording";
 import { expandSnippetTokens, type Snippet } from "../lib/snippets";
-import { tryRunSlashCommand, type SlashCommandMeta } from "./slashCommands";
 import { getChat, useChatStore } from "../store/chatStore";
 import { useSnippetsStore } from "../store/snippetsStore";
-import { observeUserMessage } from "@/modules/engineering-profile/observer";
-import { currentWorkspaceEnv } from "@/modules/workspace";
+import { type SlashCommandMeta, tryRunSlashCommand } from "./slashCommands";
 
 export type FileAttachment = {
   id: string;
@@ -308,17 +308,21 @@ export function AiComposerProvider({ children }: ProviderProps) {
       void chat.sendMessage({ role: "user", parts } as Parameters<
         typeof chat.sendMessage
       >[0]);
-      observeSubmittedMessage(effectiveText, store.live.getProjectRoot());
 
-      // Trigger profile refinement on user-sent messages only.
-      // This is the controlled, intelligent entry point (subject to
-      // MIN_REFINEMENT_INTERVAL, pending signals count, in-flight lock,
-      // etc.). Avoids over-calling the LLM extractor on every agent turn
-      // or idle, which was causing excessive API cost and constant
-      // profile.json writes/flicker.
+      // Resolve to the proper (git-root) project for this context so that
+      // preference signals and refinement target the .terax of the project
+      // the user is actually editing, not a stale launch dir.
+      const { resolveProfileProjectRoot } = await import(
+        "@/modules/engineering-profile/projectRoot"
+      );
+      const ctx = store.live.getProjectRoot();
+      const profileRoot = await resolveProfileProjectRoot(ctx);
+
+      observeSubmittedMessage(effectiveText, profileRoot);
+
       void import("@/modules/engineering-profile/learningAgent").then(
         ({ notifyUserMessageSent }) => {
-          notifyUserMessageSent(store.live.getProjectRoot());
+          notifyUserMessageSent(profileRoot);
         },
       );
     })();

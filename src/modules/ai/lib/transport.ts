@@ -1,23 +1,25 @@
-import type { UIMessage } from "@ai-sdk/react";
-import type { CustomEndpoint } from "../config";
-import { runAgentStream, type AgentUsageDelta } from "./agent";
-import type { ProviderKeys, CustomEndpointKeys } from "./keyring";
-import { native } from "./native";
-import type { ToolContext } from "../tools/tools";
+import {
+  notifyChatTurnFinished as notifyTurnFinished,
+  setAgentProjectRoot,
+  startLearningAgent as startAgent,
+} from "@/modules/engineering-profile/learningAgent";
+import { observeUserMessage } from "@/modules/engineering-profile/observer";
+import {
+  anchorProjectRoot,
+  resolveProfileProjectRoot,
+} from "@/modules/engineering-profile/projectRoot";
+import type { ContextPackage } from "@/modules/engineering-profile/runtime";
 import {
   buildContextPackage,
   loadProfileArtifacts,
   renderContextPackageForPrompt,
 } from "@/modules/engineering-profile/runtime";
-import type { ContextPackage } from "@/modules/engineering-profile/runtime";
-import { anchorProjectRoot } from "@/modules/engineering-profile/projectRoot";
-import { observeUserMessage } from "@/modules/engineering-profile/observer";
-import { ensureBootstrap } from "@/modules/engineering-profile/bootstrap";
-import {
-  startLearningAgent as startAgent,
-  setAgentProjectRoot,
-  notifyChatTurnFinished as notifyTurnFinished,
-} from "@/modules/engineering-profile/learningAgent";
+import type { UIMessage } from "@ai-sdk/react";
+import type { CustomEndpoint } from "../config";
+import type { ToolContext } from "../tools/tools";
+import { type AgentUsageDelta, runAgentStream } from "./agent";
+import type { CustomEndpointKeys, ProviderKeys } from "./keyring";
+import { native } from "./native";
 
 const TERAX_MD_MAX_BYTES = 32 * 1024;
 type MemoryCacheEntry = { content: string | null; mtime: number };
@@ -188,30 +190,34 @@ type SendOptions = {
 export function createContextAwareTransport(deps: Deps) {
   const run = async (options: SendOptions) => {
     const live = deps.getLive();
-    const liveRoot = live.workspaceRoot;
-    const projectRoot =
-      anchorProjectRoot(deps.getProjectRoot?.() ?? liveRoot) ?? liveRoot;
+    // Resolve using current live context (follows active terminal) then
+    // normalize to git root + anchor. This is what makes profile target the
+    // right project when the user is working in terax-ai (or any other
+    // checkout) instead of whatever launchCwd was.
+    const contextDir = deps.getProjectRoot?.() ?? live.workspaceRoot ?? null;
+    const resolved = await resolveProfileProjectRoot(contextDir);
+    const projectRoot = anchorProjectRoot(resolved) ?? resolved ?? contextDir;
     if (projectRoot) {
       setAgentProjectRoot(projectRoot);
       if (!bootstrappedProjects.has(projectRoot)) {
         bootstrappedProjects.add(projectRoot);
         void startAgent(projectRoot);
       }
-      // Eagerly ensure the .terax/profile.md (and .json) skeleton exists
-      // for this anchored project. This guarantees that loadProfileArtifacts
-      // will always succeed in reading and injecting the raw on-disk
-      // Engineering Profile (as the <profile-artifacts> block) into every
-      // AI chat turn/context for the project — even before the first
-      // preference signal or refinement. The system prompt explicitly
-      // tells the model that this is auto-injected and that it must
-      // maintain it. ensureBootstrap is a no-op if the files already exist.
-      void ensureBootstrap(projectRoot).catch(() => {});
+      // Do not eagerly create .terax/ here. The skeleton and profile files are
+      // created only when real preference signals are recorded (see recordSignal
+      // + ensureBootstrap). This prevents littering incidental or short-lived
+      // directories with the same initial profile data.
     }
     await observeForProfile(options.messages, projectRoot);
     const projectMemory = await readTeraxMd(live.workspaceRoot);
     const profileArtifacts = projectRoot
       ? await loadProfileArtifacts(projectRoot, 4000)
       : null;
+    // profileContent provides the raw .terax/profile.md (root + splits) as passive
+    // context in the stable system prompt, exactly like TERAX.md. This fulfills
+    // "provide the profile.md file as context" without requiring the chat agent
+    // to use any learning tools or know the machinery.
+    const profileContent = profileArtifacts?.rootBody ?? null;
     const taskText = lastUserTaskText(options.messages);
     const profilePkg = taskText
       ? await loadProfilePackage(projectRoot, taskText)
@@ -280,6 +286,7 @@ export function createContextAwareTransport(deps: Deps) {
       thinkingLevel: (deps.getThinkingLevel?.() ??
         "off") as import("./thinking").ThinkingLevel,
       projectMemory,
+      profileContent,
       uiMessages: messagesForRun,
       abortSignal: options.abortSignal,
     });

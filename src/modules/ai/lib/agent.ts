@@ -321,6 +321,7 @@ function buildStableSystem(
   persona: { name: string; instructions: string } | null,
   customInstructions: string | undefined,
   projectMemory: string | null,
+  profileContent: string | null,
 ): string {
   const base = selectSystemPrompt(modelId);
   const personaBlock = persona?.instructions.trim()
@@ -333,7 +334,11 @@ function buildStableSystem(
     projectMemory && projectMemory.trim().length > 0
       ? `\n\n## PROJECT — TERAX.md\n${projectMemory.trim()}`
       : "";
-  return `${base}${memoryBlock}${personaBlock}${customBlock}`;
+  const profileBlock =
+    profileContent && profileContent.trim().length > 0
+      ? `\n\n## PROJECT PROFILE — .terax/profile.md\n${profileContent.trim()}`
+      : "";
+  return `${base}${memoryBlock}${profileBlock}${personaBlock}${customBlock}`;
 }
 
 // OpenAI / Gemini / DeepSeek apply prefix caching automatically; only
@@ -415,6 +420,7 @@ export type RunAgentOptions = {
   customEndpointKeys?: CustomEndpointKeys;
   planMode?: boolean;
   projectMemory?: string | null;
+  profileContent?: string | null;
   uiMessages: UIMessage[];
   abortSignal?: AbortSignal;
   thinkingLevel?: ThinkingLevel;
@@ -444,6 +450,7 @@ export async function runAgentStream(opts: RunAgentOptions) {
     opts.agentPersona ?? null,
     opts.customInstructions,
     opts.projectMemory ?? null,
+    opts.profileContent ?? null,
   );
 
   const history = await convertToModelMessages(opts.uiMessages);

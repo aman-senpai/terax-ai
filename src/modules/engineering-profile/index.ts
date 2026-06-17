@@ -4,37 +4,21 @@
 // here for use by App-level wiring, tests, and any future UI surface
 // (e.g. a profile inspector panel).
 
-export type {
-  Domain,
-  DomainProfile,
-  LoadedProfiles,
-  Preference,
-  PreferenceCandidate,
-  PreferenceExplanation,
-  ExplainEvidence,
-  Profile,
-  ProfileSnapshot,
-  RefinementConfig,
-  RefinementProvider,
-  Scope,
-  Signal,
-  SignalSource,
-  SnapshotChange,
-  ExtractionResult,
-} from "./types";
-export type { RefineResult } from "./refinement";
+export type { EngineeringProfileDeps } from "./api";
 export {
-  DEFAULT_REFINEMENT_CONFIG,
-  DOMAIN_HINTS,
-  DOMAIN_HINT_SET,
-  DEFAULT_DOMAIN,
-  isDomain,
-  isKnownDomainHint,
-  normalizeDomain,
-  SIGNAL_SOURCES,
-  SOURCE_WEIGHTS,
-} from "./types";
-
+  defaultDeps,
+  getMergedProfile,
+  getProfile,
+  getRefinementConfig,
+  listProjectProfiles,
+  refineProjectProfile,
+  refineUserProfile,
+  rollbackProfile,
+  setRefinementConfig,
+  showProfileHistory,
+  showSignals,
+} from "./api";
+export { bootstrapPath, ensureBootstrap } from "./bootstrap";
 export {
   aggregateScore,
   clamp01,
@@ -46,7 +30,41 @@ export {
   similarity,
   totalWeight,
 } from "./confidence";
-
+export type { Extractor, ExtractorDeps } from "./extraction";
+export { llmExtractor, pickExtractor } from "./extraction";
+export type { AgentState } from "./learningAgent";
+export {
+  forceRefine,
+  forceRefineSync,
+  getAgentState,
+  notifyChatTurnFinished,
+  notifySignalRecorded,
+  notifyToolRejection,
+  notifyUserFileEdit,
+  notifyUserMessageSent,
+  setAgentProjectRoot,
+  startLearningAgent,
+  stopLearningAgent,
+  subscribeAgent,
+} from "./learningAgent";
+export type { ObservationInput, ObservationResult } from "./observer";
+export { observeUserMessage } from "./observer";
+export {
+  anchorProjectRoot,
+  getAnchoredProjectRoot,
+  resetAnchoredProjectRoot,
+  resolveProfileProjectRoot,
+} from "./projectRoot";
+export type { RefineResult } from "./refinement";
+export {
+  buildDomainProfiles,
+  diffChanges,
+  mergeProfiles,
+  refineProfile,
+  resolveConflict,
+  rollbackTo,
+} from "./refinement";
+export type { ContextBlock, ContextPackage } from "./runtime";
 export {
   buildContextPackage,
   classifyTask,
@@ -54,73 +72,50 @@ export {
   loadProfiles,
   renderContextPackageForPrompt,
 } from "./runtime";
-export type { ContextBlock, ContextPackage } from "./runtime";
-
+export { LearningAgentPill } from "./StatusPill";
+export type { RecordSignalInput, RecordSignalResult } from "./signals";
 export {
-  refineProfile,
-  rollbackTo,
-  diffChanges,
-  buildDomainProfiles,
-  mergeProfiles,
-  resolveConflict,
-} from "./refinement";
-
-export {
-  getMergedProfile,
-  getProfile,
-  getRefinementConfig,
-  listProjectProfiles,
-  refineProjectProfile,
-  refineUserProfile,
-  rollbackProfile,
-  setRefinementConfig,
-  showProfileHistory,
-  showSignals,
-  defaultDeps,
-} from "./api";
-export type { EngineeringProfileDeps } from "./api";
-
-export {
+  loadSignals,
+  recordAcceptedChange,
+  recordArchitectureDecision,
+  recordConfigSetting,
+  recordDesignCritique,
+  recordExplicitFeedback,
+  recordRecurringRequest,
+  recordRejectedChange,
   recordSignal,
   recordSignals,
-  recordAcceptedChange,
-  recordRejectedChange,
   recordUserModification,
-  recordArchitectureDecision,
-  recordRecurringRequest,
-  recordDesignCritique,
   recordWorkflowInstruction,
-  recordConfigSetting,
-  recordExplicitFeedback,
-  loadSignals,
 } from "./signals";
-export type { RecordSignalInput, RecordSignalResult } from "./signals";
-
+export { makeBlankProfile, storage } from "./storage";
 export { buildProfileTools } from "./tools";
-export { storage, makeBlankProfile } from "./storage";
-export { llmExtractor, pickExtractor } from "./extraction";
-export type { Extractor, ExtractorDeps } from "./extraction";
-export { observeUserMessage } from "./observer";
-export type { ObservationInput, ObservationResult } from "./observer";
-export { ensureBootstrap, bootstrapPath } from "./bootstrap";
+export type {
+  Domain,
+  DomainProfile,
+  ExplainEvidence,
+  ExtractionResult,
+  LoadedProfiles,
+  Preference,
+  PreferenceCandidate,
+  PreferenceExplanation,
+  Profile,
+  ProfileSnapshot,
+  RefinementConfig,
+  RefinementProvider,
+  Scope,
+  Signal,
+  SignalSource,
+  SnapshotChange,
+} from "./types";
 export {
-  anchorProjectRoot,
-  getAnchoredProjectRoot,
-  resetAnchoredProjectRoot,
-} from "./projectRoot";
-export {
-  startLearningAgent,
-  stopLearningAgent,
-  setAgentProjectRoot,
-  notifySignalRecorded,
-  notifyChatTurnFinished,
-  notifyToolRejection,
-  notifyUserFileEdit,
-  notifyUserMessageSent,
-  getAgentState,
-  subscribeAgent,
-  forceRefine,
-  forceRefineSync,
-} from "./learningAgent";
-export type { AgentState } from "./learningAgent";
-export { LearningAgentPill } from "./StatusPill";
+  DEFAULT_DOMAIN,
+  DEFAULT_REFINEMENT_CONFIG,
+  DOMAIN_HINT_SET,
+  DOMAIN_HINTS,
+  isDomain,
+  isKnownDomainHint,
+  normalizeDomain,
+  SIGNAL_SOURCES,
+  SOURCE_WEIGHTS,
+} from "./types";

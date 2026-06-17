@@ -1,24 +1,24 @@
+import { useChatStore } from "@/modules/ai/store/chatStore";
+import type { ToolContext } from "@/modules/ai/tools/context";
 import { tool } from "ai";
 import { z } from "zod";
-import { useChatStore } from "@/modules/ai/store/chatStore";
-import { explainPreference } from "./runtime";
 import {
   getMergedProfile,
   getProfile,
   listProjectProfiles,
   recordRejectedChange,
   recordSignal,
-  refineUserProfile,
   refineProjectProfile,
+  refineUserProfile,
   rollbackProfile,
   setRefinementConfig,
   showProfileHistory,
   showSignals,
 } from "./api";
-import { isDomain, type Domain } from "./types";
-import type { ToolContext } from "@/modules/ai/tools/context";
-import { anchorProjectRoot } from "./projectRoot";
 import { makeExtractorDeps } from "./autoRefine";
+import { anchorProjectRoot, resolveProfileProjectRoot } from "./projectRoot";
+import { explainPreference } from "./runtime";
+import { type Domain, isDomain } from "./types";
 
 const dom = z.string().refine(isDomain, "must be a known domain");
 const sourceSchema = z.enum([
@@ -33,7 +33,7 @@ const sourceSchema = z.enum([
   "config-setting",
 ]);
 
-export function buildProfileTools(_ctx: ToolContext) {
+export function buildProfileTools(ctx: ToolContext) {
   return {
     record_preference_signal: tool({
       description:
@@ -60,12 +60,35 @@ export function buildProfileTools(_ctx: ToolContext) {
         weight: z.number().min(0.1).max(2).default(1).optional(),
       }),
       execute: async (input) => {
-        const raw =
-          useChatStore.getState().live.getProjectRoot() ??
-          useChatStore.getState().live.getWorkspaceRoot() ??
-          null;
-        const projectRoot = anchorProjectRoot(raw) ?? raw;
-        const scope = input.scope === "project" && !projectRoot ? "user" : input.scope;
+        const liveState = useChatStore.getState().live;
+        const activeFile = liveState.getActiveFile?.();
+        const fileDir = activeFile
+          ? activeFile.substring(0, activeFile.lastIndexOf("/")) || null
+          : null;
+        const cands = [
+          ctx.getCwd?.(),
+          fileDir,
+          liveState.getProjectRoot(),
+          liveState.getWorkspaceRoot(),
+          ctx.getWorkspaceRoot?.(),
+          ctx.getProjectRoot?.(),
+        ].filter(Boolean) as string[];
+        let raw: string | null = null;
+        let resolved: string | null = null;
+        for (const c of cands) {
+          const r = await resolveProfileProjectRoot(c);
+          if (r) {
+            raw = c;
+            resolved = r;
+            break;
+          }
+        }
+        if (!resolved && cands.length)
+          resolved = await resolveProfileProjectRoot(cands[0]);
+        const projectRoot =
+          anchorProjectRoot(resolved) ?? resolved ?? raw ?? cands[0] ?? null;
+        const scope =
+          input.scope === "project" && !projectRoot ? "user" : input.scope;
         const result = await recordSignal({
           source: input.source,
           category: input.category as Domain,
@@ -92,11 +115,33 @@ export function buildProfileTools(_ctx: ToolContext) {
         evidence: z.string().min(1),
       }),
       execute: async (input) => {
-        const raw =
-          useChatStore.getState().live.getProjectRoot() ??
-          useChatStore.getState().live.getWorkspaceRoot() ??
-          null;
-        const projectRoot = anchorProjectRoot(raw) ?? raw;
+        const liveState = useChatStore.getState().live;
+        const activeFile = liveState.getActiveFile?.();
+        const fileDir = activeFile
+          ? activeFile.substring(0, activeFile.lastIndexOf("/")) || null
+          : null;
+        const cands = [
+          ctx.getCwd?.(),
+          fileDir,
+          liveState.getProjectRoot(),
+          liveState.getWorkspaceRoot(),
+          ctx.getWorkspaceRoot?.(),
+          ctx.getProjectRoot?.(),
+        ].filter(Boolean) as string[];
+        let raw: string | null = null;
+        let resolved: string | null = null;
+        for (const c of cands) {
+          const r = await resolveProfileProjectRoot(c);
+          if (r) {
+            raw = c;
+            resolved = r;
+            break;
+          }
+        }
+        if (!resolved && cands.length)
+          resolved = await resolveProfileProjectRoot(cands[0]);
+        const projectRoot =
+          anchorProjectRoot(resolved) ?? resolved ?? raw ?? cands[0] ?? null;
         const result = await recordRejectedChange(
           input.preference,
           input.evidence,
@@ -121,11 +166,33 @@ export function buildProfileTools(_ctx: ToolContext) {
         note: z.string().max(120).optional(),
       }),
       execute: async (input) => {
-        const raw =
-          useChatStore.getState().live.getProjectRoot() ??
-          useChatStore.getState().live.getWorkspaceRoot() ??
-          null;
-        const root = anchorProjectRoot(raw) ?? raw;
+        const liveState = useChatStore.getState().live;
+        const activeFile = liveState.getActiveFile?.();
+        const fileDir = activeFile
+          ? activeFile.substring(0, activeFile.lastIndexOf("/")) || null
+          : null;
+        const cands = [
+          ctx.getCwd?.(),
+          fileDir,
+          liveState.getProjectRoot(),
+          liveState.getWorkspaceRoot(),
+          ctx.getWorkspaceRoot?.(),
+          ctx.getProjectRoot?.(),
+        ].filter(Boolean) as string[];
+        let raw: string | null = null;
+        let resolved: string | null = null;
+        for (const c of cands) {
+          const r = await resolveProfileProjectRoot(c);
+          if (r) {
+            raw = c;
+            resolved = r;
+            break;
+          }
+        }
+        if (!resolved && cands.length)
+          resolved = await resolveProfileProjectRoot(cands[0]);
+        const root =
+          anchorProjectRoot(resolved) ?? resolved ?? raw ?? cands[0] ?? null;
         const scope = input.scope === "project" && !root ? "user" : input.scope;
         const result =
           scope === "project" && root
@@ -157,8 +224,37 @@ export function buildProfileTools(_ctx: ToolContext) {
         limit: z.number().int().min(1).max(50).default(20).optional(),
       }),
       execute: async (input) => {
-        const raw = useChatStore.getState().live.getWorkspaceRoot() ?? null;
-        const root = anchorProjectRoot(raw) ?? raw;
+        const liveState = useChatStore.getState().live;
+        // Collect multiple candidates for current context to avoid stale launch/previous
+        // root (e.g. resume) when user/agent is working in terax-ai.
+        // Prefer active editor file dir (if editing in the project), cwd, workspace/project.
+        const activeFile = liveState.getActiveFile?.();
+        const fileDir = activeFile
+          ? activeFile.substring(0, activeFile.lastIndexOf("/")) || null
+          : null;
+        const cands = [
+          ctx.getCwd?.(),
+          fileDir,
+          liveState.getProjectRoot(),
+          liveState.getWorkspaceRoot(),
+          ctx.getWorkspaceRoot?.(),
+          ctx.getProjectRoot?.(),
+        ].filter(Boolean) as string[];
+        let raw: string | null = null;
+        let resolved: string | null = null;
+        for (const c of cands) {
+          const r = await resolveProfileProjectRoot(c);
+          if (r) {
+            raw = c;
+            resolved = r;
+            break;
+          }
+        }
+        if (!resolved && cands.length) {
+          resolved = await resolveProfileProjectRoot(cands[0]);
+        }
+        const root =
+          anchorProjectRoot(resolved) ?? resolved ?? raw ?? cands[0] ?? null;
         const profile =
           input.scope === "merged"
             ? await getMergedProfile(root)
@@ -200,8 +296,33 @@ export function buildProfileTools(_ctx: ToolContext) {
           .describe("Preference id from get_profile output."),
       }),
       execute: async (input) => {
-        const raw = useChatStore.getState().live.getWorkspaceRoot() ?? null;
-        const root = anchorProjectRoot(raw) ?? raw;
+        const liveState = useChatStore.getState().live;
+        const activeFile = liveState.getActiveFile?.();
+        const fileDir = activeFile
+          ? activeFile.substring(0, activeFile.lastIndexOf("/")) || null
+          : null;
+        const cands = [
+          ctx.getCwd?.(),
+          fileDir,
+          liveState.getProjectRoot(),
+          liveState.getWorkspaceRoot(),
+          ctx.getWorkspaceRoot?.(),
+          ctx.getProjectRoot?.(),
+        ].filter(Boolean) as string[];
+        let raw: string | null = null;
+        let resolved: string | null = null;
+        for (const c of cands) {
+          const r = await resolveProfileProjectRoot(c);
+          if (r) {
+            raw = c;
+            resolved = r;
+            break;
+          }
+        }
+        if (!resolved && cands.length)
+          resolved = await resolveProfileProjectRoot(cands[0]);
+        const root =
+          anchorProjectRoot(resolved) ?? resolved ?? raw ?? cands[0] ?? null;
         const exp = await explainPreference(input.preferenceId, root);
         if (!exp) return { found: false };
         return {
@@ -239,8 +360,33 @@ export function buildProfileTools(_ctx: ToolContext) {
         limit: z.number().int().min(1).max(50).default(10).optional(),
       }),
       execute: async (input) => {
-        const raw = useChatStore.getState().live.getWorkspaceRoot() ?? null;
-        const root = anchorProjectRoot(raw) ?? raw;
+        const liveState = useChatStore.getState().live;
+        const activeFile = liveState.getActiveFile?.();
+        const fileDir = activeFile
+          ? activeFile.substring(0, activeFile.lastIndexOf("/")) || null
+          : null;
+        const cands = [
+          ctx.getCwd?.(),
+          fileDir,
+          liveState.getProjectRoot(),
+          liveState.getWorkspaceRoot(),
+          ctx.getWorkspaceRoot?.(),
+          ctx.getProjectRoot?.(),
+        ].filter(Boolean) as string[];
+        let raw: string | null = null;
+        let resolved: string | null = null;
+        for (const c of cands) {
+          const r = await resolveProfileProjectRoot(c);
+          if (r) {
+            raw = c;
+            resolved = r;
+            break;
+          }
+        }
+        if (!resolved && cands.length)
+          resolved = await resolveProfileProjectRoot(cands[0]);
+        const root =
+          anchorProjectRoot(resolved) ?? resolved ?? raw ?? cands[0] ?? null;
         const scope = input.scope === "project" && !root ? "user" : input.scope;
         const snapshots = await showProfileHistory(
           scope,
@@ -267,8 +413,33 @@ export function buildProfileTools(_ctx: ToolContext) {
         limit: z.number().int().min(1).max(200).default(50).optional(),
       }),
       execute: async (input) => {
-        const raw = useChatStore.getState().live.getWorkspaceRoot() ?? null;
-        const root = anchorProjectRoot(raw) ?? raw;
+        const liveState = useChatStore.getState().live;
+        const activeFile = liveState.getActiveFile?.();
+        const fileDir = activeFile
+          ? activeFile.substring(0, activeFile.lastIndexOf("/")) || null
+          : null;
+        const cands = [
+          ctx.getCwd?.(),
+          fileDir,
+          liveState.getProjectRoot(),
+          liveState.getWorkspaceRoot(),
+          ctx.getWorkspaceRoot?.(),
+          ctx.getProjectRoot?.(),
+        ].filter(Boolean) as string[];
+        let raw: string | null = null;
+        let resolved: string | null = null;
+        for (const c of cands) {
+          const r = await resolveProfileProjectRoot(c);
+          if (r) {
+            raw = c;
+            resolved = r;
+            break;
+          }
+        }
+        if (!resolved && cands.length)
+          resolved = await resolveProfileProjectRoot(cands[0]);
+        const root =
+          anchorProjectRoot(resolved) ?? resolved ?? raw ?? cands[0] ?? null;
         const scope = input.scope === "project" && !root ? "user" : input.scope;
         const list = await showSignals(
           scope,
@@ -299,8 +470,33 @@ export function buildProfileTools(_ctx: ToolContext) {
       }),
       needsApproval: true,
       execute: async (input) => {
-        const raw = useChatStore.getState().live.getWorkspaceRoot() ?? null;
-        const root = anchorProjectRoot(raw) ?? raw;
+        const liveState = useChatStore.getState().live;
+        const activeFile = liveState.getActiveFile?.();
+        const fileDir = activeFile
+          ? activeFile.substring(0, activeFile.lastIndexOf("/")) || null
+          : null;
+        const cands = [
+          ctx.getCwd?.(),
+          fileDir,
+          liveState.getProjectRoot(),
+          liveState.getWorkspaceRoot(),
+          ctx.getWorkspaceRoot?.(),
+          ctx.getProjectRoot?.(),
+        ].filter(Boolean) as string[];
+        let raw: string | null = null;
+        let resolved: string | null = null;
+        for (const c of cands) {
+          const r = await resolveProfileProjectRoot(c);
+          if (r) {
+            raw = c;
+            resolved = r;
+            break;
+          }
+        }
+        if (!resolved && cands.length)
+          resolved = await resolveProfileProjectRoot(cands[0]);
+        const root =
+          anchorProjectRoot(resolved) ?? resolved ?? raw ?? cands[0] ?? null;
         const scope = input.scope === "project" && !root ? "user" : input.scope;
         const result = await rollbackProfile(
           input.snapshotId,

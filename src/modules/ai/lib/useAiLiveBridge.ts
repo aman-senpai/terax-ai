@@ -1,13 +1,13 @@
-import { type RefObject, useEffect, useRef } from "react";
-import { invoke } from "@tauri-apps/api/core";
 import { useManagedAgentsStore } from "@/modules/agents/store/managedAgentsStore";
+import type { Tab } from "@/modules/tabs";
 import {
   findLeafCwd,
   type TerminalPaneHandle,
   whenSessionReady,
   writeToSession,
 } from "@/modules/terminal";
-import type { Tab } from "@/modules/tabs";
+import { invoke } from "@tauri-apps/api/core";
+import { type RefObject, useEffect, useRef } from "react";
 import type { Live } from "../store/chatStore";
 import { redactSensitive } from "./redact";
 
@@ -106,8 +106,20 @@ export function useAiLiveBridge(params: Params) {
         return explorerRoot ?? launchCwd ?? null;
       },
       getProjectRoot: () => {
-        const { explorerRoot, launchCwd } = ref.current;
-        return explorerRoot ?? launchCwd ?? null;
+        // Current context directory for the AI / profile system.
+        // Profile code further resolves this via resolveProfileProjectRoot (git
+        // toplevel) + anchor so that .terax lives at repo roots and follows
+        // checkout switches without following every deep cd.
+        // Also consider active editor's dir so profile follows where the user
+        // is actually working (e.g. editing in terax-ai while terminal cwd is elsewhere).
+        const { explorerRoot, launchCwd, home, activeId, tabs } = ref.current;
+        const active = tabs.find((t) => t.id === activeId);
+        let editorDir: string | null = null;
+        if (active?.kind === "editor" && active.path) {
+          const idx = active.path.lastIndexOf("/");
+          editorDir = idx > 0 ? active.path.substring(0, idx) : active.path;
+        }
+        return editorDir ?? explorerRoot ?? launchCwd ?? home ?? null;
       },
       getActiveFile: () => {
         const { activeId, tabs } = ref.current;

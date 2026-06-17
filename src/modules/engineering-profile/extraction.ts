@@ -1,22 +1,22 @@
-import { z } from "zod";
+import { DEFAULT_MODEL_ID, type ProviderId } from "@/modules/ai/config";
 import {
   buildConfiguredLanguageModel,
   type LocalProviderConfig,
 } from "@/modules/ai/lib/agent";
-import { DEFAULT_MODEL_ID, type ProviderId } from "@/modules/ai/config";
 import type {
-  ProviderKeys,
   CustomEndpointKeys,
+  ProviderKeys,
 } from "@/modules/ai/lib/keyring";
+import { z } from "zod";
 import {
-  isDomain,
   type Domain,
   type ExtractionResult,
+  isDomain,
+  type Preference,
   type PreferenceCandidate,
   type RefinementConfig,
   type RefinementProvider,
   type Signal,
-  type Preference,
 } from "./types";
 
 export type ExtractorDeps = {
@@ -26,6 +26,7 @@ export type ExtractorDeps = {
   getCustomEndpointKeys?: () => CustomEndpointKeys;
   getConfig: () => RefinementConfig;
   getPriorPreferences?: () => ReadonlyArray<Preference>;
+  currentProjectRoot?: string | null;
 };
 
 export type Extractor = (
@@ -73,8 +74,6 @@ Rules:
 
 The candidates you output will be used to update the on-disk profile (root + subdirectories) and the internal state so the AI's future behavior better matches the user's taste. The loop (signals from work + feedback + human edits → this refinement → updated profile → injected in next turns) is how the profile stays always current and self-improving.`;
 
-
-
 export const llmExtractor: Extractor = async (signals, deps) => {
   const config = deps.getConfig();
   if (signals.length === 0) {
@@ -87,10 +86,14 @@ export const llmExtractor: Extractor = async (signals, deps) => {
     deps.getKeys(),
     localConfig,
   );
-  
+
   const priors = deps.getPriorPreferences?.() ?? [];
-  const prompt = renderInputsForLLM(signals, priors);
-  
+  const prompt = renderInputsForLLM(
+    signals,
+    priors,
+    deps.currentProjectRoot ?? null,
+  );
+
   try {
     const { generateObject } = await import("ai");
     const { buildThinkingProviderOptions } = await import(
@@ -129,10 +132,7 @@ export const llmExtractor: Extractor = async (signals, deps) => {
     }
     return { candidates, discarded, provider: config.provider };
   } catch (err) {
-    console.warn(
-      "[engineering-profile] LLM extraction failed:",
-      err,
-    );
+    console.warn("[engineering-profile] LLM extraction failed:", err);
     throw err;
   }
 };
@@ -144,37 +144,58 @@ function clampWeight(w: number): number {
   return w;
 }
 
-
 function renderInputsForLLM(
   signals: ReadonlyArray<Signal>,
   priors: ReadonlyArray<Preference>,
+  currentProjectRoot: string | null,
 ): string {
   const lines: string[] = [];
-  
+
+  if (currentProjectRoot) {
+    lines.push(
+      `Current project root for this refinement: ${currentProjectRoot}`,
+    );
+    lines.push(
+      "Only produce or keep preferences that are relevant to ongoing work inside this specific directory tree. Aggressively drop or ignore any priors or signals that are clearly about a different codebase (e.g. 'resume' or 'CV' rules when the root path does not contain it).",
+    );
+    lines.push("");
+  }
+
   if (priors.length > 0) {
     lines.push("### EXISTING ENGINEERING PREFERENCES");
-    lines.push("Below are the preferences currently recorded in the user's engineering profile. If any new signals reinforce or modify these, you must map them using their exact ID in 'mergedPriorIds'.");
+    lines.push(
+      "Below are the preferences currently recorded in the user's engineering profile for *this* project. If any new signals reinforce or modify these, you must map them using their exact ID in 'mergedPriorIds'. Drop any that do not belong here.",
+    );
     for (const p of priors) {
-      lines.push(`- [ID: ${p.id}] [Category: ${p.category}] "${p.preference}" (Confidence: ${p.confidence.toFixed(2)})`);
+      lines.push(
+        `- [ID: ${p.id}] [Category: ${p.category}] "${p.preference}" (Confidence: ${p.confidence.toFixed(2)})`,
+      );
     }
     lines.push("");
   }
 
   lines.push("### NEW OBSERVED SIGNALS");
-  lines.push("Below are the raw observations, user feedback, and actions. You must identify if they represent stable preferences, and if they map to any existing preferences above. (Repeated identical signals are grouped for brevity but all their IDs are listed so you can map every one.)");
+  lines.push(
+    "Below are the raw observations, user feedback, and actions for this project. You must identify if they represent stable preferences, and if they map to any existing preferences above. (Repeated identical signals are grouped for brevity but all their IDs are listed so you can map every one.)",
+  );
   // Group *exact* repeats by the signal's own preference text (no fuzzy, no similarity on priors, just collation of the provided data so the LLM receives everything without a 300-line wall of near-identical text).
-  const groups = new Map<string, {ids: string[], sample: any}>();
+  const groups = new Map<string, { ids: string[]; sample: any }>();
   for (const s of signals) {
     const key = `${s.category}::${s.preference}`;
-    if (!groups.has(key)) groups.set(key, {ids: [], sample: s});
+    if (!groups.has(key)) groups.set(key, { ids: [], sample: s });
     groups.get(key)!.ids.push(s.id);
   }
   for (const g of groups.values()) {
     const s = g.sample;
-    const idList = g.ids.length <= 8 ? g.ids.join(", ") : g.ids.slice(0,5).join(", ") + ` ... (+${g.ids.length-5} more)`;
-    lines.push(`- [IDs: ${idList}] [Category: ${s.category}] [Source e.g. ${s.source}] Preference hint: "${s.preference}" | Example evidence: "${s.evidence}"  (total ${g.ids.length} signals with this exact hint)`);
+    const idList =
+      g.ids.length <= 8
+        ? g.ids.join(", ")
+        : g.ids.slice(0, 5).join(", ") + ` ... (+${g.ids.length - 5} more)`;
+    lines.push(
+      `- [IDs: ${idList}] [Category: ${s.category}] [Source e.g. ${s.source}] Preference hint: "${s.preference}" | Example evidence: "${s.evidence}"  (total ${g.ids.length} signals with this exact hint)`,
+    );
   }
-  
+
   return lines.join("\n");
 }
 

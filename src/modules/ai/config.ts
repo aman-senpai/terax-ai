@@ -694,14 +694,7 @@ This project has a persistent, automatically maintained profile at \`.terax/prof
 
 The profile is the living memory of the user's stable, long-term preferences, patterns, architectural choices, tooling decisions, quality standards, and micro-decisions — the "invisible architecture" that should guide consistent work on this project across sessions.
 
-It is kept current through continuous observation of signals:
-- Explicit statements ("I prefer...", "always use...", "don't do that").
-- Implicit signals from user actions: edits the user makes to your output, tool rejections with reasons, repeated requests, and direct human edits to the profile files themselves.
-- The self-aware feedback loop that generates acceptance and violation signals after turns.
-
-The raw on-disk profile content (root + any split sub-profile files) is automatically injected as a \`<profile-artifacts>\` block at the start of every turn. A condensed, task-relevant view is also provided when relevant. Read the profile before you start work. Treat it as the authoritative source of truth for this project's established taste. Do not re-ask the user for preferences that are already recorded.
-
-The system performs refinement and writes updates to the on-disk profile autonomously (no user approval is needed for normal operation). The profile is intended to improve over time and remain fresh.
+The full content of the root profile.md (and relevant sub-profiles) is automatically provided as context in the system prompt under the ## PROJECT PROFILE — .terax/profile.md section (injected passively, similar to TERAX.md). Read and follow it before you start work. Treat it as the authoritative source of truth for this project's established profile. Do not re-ask the user for preferences that are already recorded.
 
 ## What belongs in the profile
 
@@ -713,39 +706,16 @@ Good examples:
 - "Prefer feature-based folder structures over type-based."
 - "Keep code extremely concise. No comments unless the reason is non-obvious from the code and history."
 
-Bad examples (one-off or non-generalizable — do not record):
+Bad examples (one-off or non-generalizable — ignore for long-term taste):
 - "Fix the bug in Button.tsx"
 - "Rename this variable for the current task"
 - File-specific or temporary instructions.
 
-## Recording signals
-
-Call \`record_preference_signal\` on any observation that reveals a stable, reusable preference. This includes explicit statements, clear implicit corrections (edits, rejections with principle, repetitions), architecture decisions the user explains, and especially direct human edits to the .terax/ profile files.
-
-Use \`record_rejection_signal\` for explicit negative feedback.
-
-One focused signal per distinct observation is sufficient. The refinement process aggregates them, merges via prior IDs, and raises confidence on canonical entries.
-
-## Refinement and autonomous updates
-
-When the user sends a new message and there are pending signals, the system runs refinement (subject to rate limits and guards). It merges signals into the smallest set of high-confidence canonical preferences. The output is written to the on-disk profile (root and subdirectories) automatically.
-
-Only call \`refine_profile\` explicitly if the user asks you to clean up or reconcile the profile, or if you have just recorded a large number of signals in the current turn and want them folded in before the next message.
-
 ## Using the profile
 
-Produce output that already respects the recorded preferences. When the profile is incomplete for a new situation, record the emerging rule so the profile (and future work) improves.
+Produce output that already respects the recorded preferences from the provided PROJECT PROFILE context. The profile improves over time from background observation.
 
-Sub-profiles in subdirectories capture domain-specific taste and compose into the overall project profile. When a split exists, the relevant sub-profile content is included in the injection.
-
-## History and auditing
-
-- \`show_profile_history\` lists previous refinement snapshots.
-- \`show_signals\` shows the raw observations behind current entries.
-- \`get_profile\` and \`explain_preference\` allow inspection of the current state and its evidence.
-- \`rollback_profile\` (user approval required) can restore an earlier snapshot.
-
-The closed loop — signals from work and feedback + human edits to the profile files + autonomous refinement + re-injection — is how the profile stays accurate and continuously improves without the user having to restate their preferences.
+**Critical protection:** '.terax/' (profile.md, profile.json, history/ etc.) is managed exclusively by the autonomous learning system and is protected from modification. The main agent and all subagents **must never** write, edit, delete, rename, or run shell commands that mutate anything inside '.terax/'. Attempts will be refused by security checks. You may read the files if needed, but do not modify them. This isolation keeps learning precise and reliable.
 
 `;
 

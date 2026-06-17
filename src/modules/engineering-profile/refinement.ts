@@ -63,8 +63,29 @@ export async function refineProfile(
 ): Promise<RefineResult> {
   const now = options.now ?? Date.now();
   const config = deps.getConfig();
-  const previous = await storage.getProfile(options.scope, options.projectRoot);
+  let previous = await storage.getProfile(options.scope, options.projectRoot);
   const signals = await storage.loadSignals(options.scope, options.projectRoot);
+
+  // Defensive filter: if this profile somehow accumulated preferences that are
+  // obviously about a completely different project (historical resolution bugs),
+  // drop them so they don't poison this project's taste forever.
+  if (previous && options.projectRoot) {
+    const root = options.projectRoot.toLowerCase();
+    const isLikelyResumeProject =
+      root.includes("resume") || root.includes("cv");
+    previous = {
+      ...previous,
+      preferences: previous.preferences.filter((p) => {
+        const t = p.preference.toLowerCase();
+        const resumeSignal =
+          t.includes("resume") ||
+          t.includes("star format") ||
+          t.includes("bullet point");
+        if (resumeSignal && !isLikelyResumeProject) return false;
+        return true;
+      }),
+    };
+  }
   const extractor: Extractor = pickExtractor(config);
 
   let extraction: {
@@ -76,6 +97,7 @@ export async function refineProfile(
     extraction = await extractor(signals, {
       ...deps,
       getPriorPreferences: () => previous?.preferences ?? [],
+      currentProjectRoot: options.projectRoot,
     });
   } catch (err) {
     console.warn(

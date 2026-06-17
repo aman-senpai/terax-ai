@@ -18,7 +18,13 @@ describe("anchorProjectRoot", () => {
   it("ignores subsequent nulls once anchored", () => {
     anchorProjectRoot("/home/me/project");
     expect(anchorProjectRoot(null)).toBe("/home/me/project");
-    expect(anchorProjectRoot("/home/me/other")).toBe("/home/me/project");
+  });
+
+  it("switches anchor to a new top-level project root", () => {
+    anchorProjectRoot("/home/me/project");
+    // Different top-level (not a subdir) represents a new project context,
+    // e.g. switching between separate checkouts. See anchorProjectRoot.
+    expect(anchorProjectRoot("/home/me/other")).toBe("/home/me/other");
   });
 
   it("returns null until a non-null root is provided", () => {

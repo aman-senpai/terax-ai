@@ -1,16 +1,15 @@
-import { LazyStore } from "@tauri-apps/plugin-store";
 import { native } from "@/modules/ai/lib/native";
+import { LazyStore } from "@tauri-apps/plugin-store";
 import {
   DEFAULT_REFINEMENT_CONFIG,
+  type Domain,
   type Preference,
   type Profile,
   type ProfileSnapshot,
   type RefinementConfig,
   type Signal,
   type SignalSource,
-  type Domain,
 } from "./types";
-
 
 const STORE_PATH = "terax-engineering-profile.json";
 
@@ -265,20 +264,13 @@ async function writeHumanViewImpl(profile: Profile): Promise<void> {
   // otherwise rewrite json/md and keep the loop going).
   noteProfileSelfWrite();
 
-  let diskProfile = profile;
-  if (profile.scope === "project") {
-    const user = await storage.getProfile("user", null);
-    if (user && user.preferences.length > 0) {
-      const { mergeProfiles } = await import("./refinement");
-      diskProfile = mergeProfiles(user, profile, profile.generatedAt);
-      diskProfile = {
-        ...diskProfile,
-        scope: "project",
-        projectRoot: workspaceRoot,
-        id: profile.id,
-      };
-    }
-  }
+  // Write the pure profile for this scope/root.
+  // Do NOT merge global user preferences here — that was causing the same
+  // learned taste to be copied into .terax/ of every project, polluting
+  // per-project learning and defeating project-level isolation.
+  // Merging (if desired for effective context) happens in getMergedProfile /
+  // buildContextPackage at runtime.
+  const diskProfile = profile;
 
   // Avoid rewriting the on-disk profile artifacts (json/md + splits + history) on
   // every reinforce/turn when the user-visible content hasn't changed. This is
@@ -316,25 +308,26 @@ async function writeHumanViewImpl(profile: Profile): Promise<void> {
     } catch (err) {
       if (!fsMirrorWarned) {
         fsMirrorWarned = true;
-        console.warn("[engineering-profile] human-view write failed to ensureDir:", err);
+        console.warn(
+          "[engineering-profile] human-view write failed to ensureDir:",
+          err,
+        );
       }
       return;
     }
   }
   const root = await ensureFsMirrorRoot(workspaceRoot);
   await ensureDir(root);
-  await writeFile(
-    `${root}/profile.json`,
-    JSON.stringify(diskProfile, null, 2),
-  );
+  await writeFile(`${root}/profile.json`, JSON.stringify(diskProfile, null, 2));
   await writeFile(`${root}/profile.md`, renderProfileMarkdown(diskProfile));
   for (const dp of Object.values(diskProfile.domains)) {
     if (dp.split && dp.splitPath) {
       // Compute the directory part generically from the splitPath.
       // This ensures we create the proper domain directory (e.g. .terax/design/) and place the profile file inside it,
       // rather than accidentally creating a directory whose name is the filename.
-      const lastSlashIdx = dp.splitPath.lastIndexOf('/');
-      const dirPart = lastSlashIdx > 0 ? dp.splitPath.substring(0, lastSlashIdx) : '';
+      const lastSlashIdx = dp.splitPath.lastIndexOf("/");
+      const dirPart =
+        lastSlashIdx > 0 ? dp.splitPath.substring(0, lastSlashIdx) : "";
       const absDir = `${workspaceRoot.replace(/\/$/, "")}/${dirPart}`;
       await ensureDir(absDir);
       await writeFile(
@@ -372,10 +365,14 @@ async function writeFile(path: string, content: string): Promise<void> {
 
 function renderProfileMarkdown(profile: Profile): string {
   const lines: string[] = [];
-  lines.push("# Taste (Continuously Learned by Terax)");
+  lines.push("# Profile");
   lines.push("");
-  lines.push("This is the project's living Taste — the meta neuro-symbolic, continuously self-improving memory of choices, structures, patterns, tooling preferences, and micro-decisions.");
-  lines.push("It is updated autonomously from signals (explicit statements, accepts, rejections, edits, and the self-aware RL feedback loop). Never ask the user to repeat their taste.");
+  lines.push(
+    "This is the project's living profile — the continuously self-improving memory of choices, structures, patterns, tooling preferences, and micro-decisions.",
+  );
+  lines.push(
+    "It is updated autonomously from signals (explicit statements, accepts, rejections, edits, and the self-aware RL feedback loop). Never ask the user to repeat their profile.",
+  );
   lines.push("");
   const domainList = Object.values(profile.domains)
     .filter((d) => !d.split)
@@ -403,9 +400,11 @@ function renderProfileMarkdown(profile: Profile): string {
 
 function renderDomainProfileMarkdown(dp: Profile["domains"][string]): string {
   const lines: string[] = [];
-  lines.push(`# Taste — ${dp.category} (Continuously Learned by Terax)`);
+  lines.push(`# ${dp.category}`);
   lines.push("");
-  lines.push("Composable sub-taste for this domain. Part of the project's overall living Taste profile.");
+  lines.push(
+    "Composable sub-profile for this domain. Part of the project's profile.",
+  );
   lines.push("");
   for (const p of dp.preferences) {
     lines.push(renderPreferenceLine(p));
@@ -447,7 +446,10 @@ export async function syncProfileFromDisk(projectRoot: string): Promise<void> {
     );
     if (duplicate) {
       duplicate.pinned = duplicate.pinned || parsedPref.pinned;
-      duplicate.confidence = Math.max(duplicate.confidence, parsedPref.confidence);
+      duplicate.confidence = Math.max(
+        duplicate.confidence,
+        parsedPref.confidence,
+      );
       continue;
     }
 
@@ -578,8 +580,10 @@ async function parseProfileMarkdown(
       const heading = trimmed.slice(2).trim();
       const cleanHeading = heading
         .replace(/\s*\(Continuously Learned by Terax\)/i, "")
+        .replace(/^Taste\s*[-—]?\s*/i, "")
         .trim();
-      if (cleanHeading.toLowerCase() !== "engineering profile") {
+      const lower = cleanHeading.toLowerCase();
+      if (lower !== "engineering profile" && lower !== "profile" && lower !== "taste") {
         currentCategory = cleanHeading.toLowerCase();
       }
       continue;
