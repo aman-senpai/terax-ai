@@ -6,6 +6,7 @@ import { useWhisperRecording } from "../hooks/useWhisperRecording";
 import { expandSnippetTokens, type Snippet } from "../lib/snippets";
 import { getChat, useChatStore } from "../store/chatStore";
 import { useSnippetsStore } from "../store/snippetsStore";
+import { usePreferencesStore } from "@/modules/settings/preferences";
 import { type SlashCommandMeta, tryRunSlashCommand } from "./slashCommands";
 
 export type FileAttachment = {
@@ -65,6 +66,12 @@ type ProviderProps = {
   children: React.ReactNode;
 };
 
+// Module-level selector — stable reference to avoid Zustand v5
+// useSyncExternalStore consistency-check re-renders on array returns.
+const selectPendingSelections = (
+  s: ReturnType<typeof useChatStore.getState>,
+) => s.pendingSelections;
+
 export function AiComposerProvider({ children }: ProviderProps) {
   const sessionId = useChatStore((s) => s.activeSessionId);
   const status = useChatStore((s) => s.agentMeta.status);
@@ -79,7 +86,7 @@ export function AiComposerProvider({ children }: ProviderProps) {
   const focusSignal = useChatStore((s) => s.focusSignal);
   const pendingPrefill = useChatStore((s) => s.pendingPrefill);
   const consumePrefill = useChatStore((s) => s.consumePrefill);
-  const pendingSelections = useChatStore((s) => s.pendingSelections);
+  const pendingSelections = useChatStore(selectPendingSelections);
   const consumeSelections = useChatStore((s) => s.consumeSelections);
 
   useEffect(() => {
@@ -240,7 +247,8 @@ export function AiComposerProvider({ children }: ProviderProps) {
       commandSource = `#${pickedCommands[0].name} ${trimmed}`.trim();
     }
     if (commandSource.startsWith("/") || commandSource.startsWith("#")) {
-      const outcome = tryRunSlashCommand(commandSource);
+      const skills = usePreferencesStore.getState().skillsConfigs;
+      const outcome = tryRunSlashCommand(commandSource, skills);
       if (outcome.kind === "handled") {
         setValue("");
         // Clear picked commands so a handled toggle command (e.g. /plan)

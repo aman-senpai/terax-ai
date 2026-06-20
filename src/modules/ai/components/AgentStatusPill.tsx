@@ -8,8 +8,12 @@ type Props = {
   onClick: () => void;
 };
 
+// Module-level selector — stable reference for Zustand v5.
+const selectAgentMeta = (s: ReturnType<typeof useChatStore.getState>) =>
+  s.agentMeta;
+
 export function AgentStatusPill({ onClick }: Props) {
-  const meta = useChatStore((s) => s.agentMeta);
+  const meta = useChatStore(selectAgentMeta);
 
   // awaiting-approval is surfaced by the notification + auto-opened mini window.
   if (meta.status === "awaiting-approval") return null;

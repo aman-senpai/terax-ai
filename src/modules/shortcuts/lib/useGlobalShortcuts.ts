@@ -9,6 +9,11 @@ export type UseGlobalShortcutsOptions = {
   isDisabled?: (id: ShortcutId, e: KeyboardEvent) => boolean;
 };
 
+// Module-level selector — stable reference for Zustand v5.
+const selectShortcuts = (
+  s: ReturnType<typeof usePreferencesStore.getState>,
+) => s.shortcuts;
+
 export function useGlobalShortcuts(
   handlers: ShortcutHandlers,
   options?: UseGlobalShortcutsOptions,
@@ -17,7 +22,7 @@ export function useGlobalShortcuts(
   latest.current = { handlers, options };
 
   // Access the shortcuts from the store
-  const userShortcuts = usePreferencesStore((s) => s.shortcuts);
+  const userShortcuts = usePreferencesStore(selectShortcuts);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

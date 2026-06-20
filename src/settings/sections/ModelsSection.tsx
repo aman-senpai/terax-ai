@@ -142,6 +142,11 @@ const LOCAL_META: Partial<Record<ProviderId, LocalMeta>> = {
   },
 };
 
+// Module-level selector — stable reference for Zustand v5.
+const selectCustomEndpoints = (
+  s: ReturnType<typeof usePreferencesStore.getState>,
+) => s.customEndpoints;
+
 export function ModelsSection() {
   const [keys, setKeys] = useState<KeysMap | null>(null);
   const [epKeys, setEpKeys] = useState<CustomEndpointKeys>({});
@@ -160,7 +165,7 @@ export function ModelsSection() {
     (s) => s.openaiCompatibleContextLimit,
   );
   const openrouterModelId = usePreferencesStore((s) => s.openrouterModelId);
-  const customEndpoints = usePreferencesStore((s) => s.customEndpoints);
+  const customEndpoints = usePreferencesStore(selectCustomEndpoints);
 
   useEffect(() => {
     void getAllKeys().then(setKeys);

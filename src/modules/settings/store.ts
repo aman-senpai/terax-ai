@@ -75,6 +75,15 @@ export type ShellAllowlistEntry = {
   enabled: boolean;
 };
 
+export type AgentOverride = {
+  /** Override the default instructions prompt. */
+  instructions?: string;
+  /** Tool groups to allow. null = all tools allowed. */
+  toolAllowlist?: string[] | null;
+  /** Glob patterns for allowed shell commands. */
+  shellAllowlist?: string[];
+};
+
 export type PermissionSettings = {
   toolPermissions: ToolPermissions;
   shellAllowlist: ShellAllowlistEntry[];
@@ -136,6 +145,7 @@ export type Preferences = {
   permissions: PermissionSettings;
   mcpServers: McpServerConfig[];
   skillsConfigs: SkillConfig[];
+  agentOverrides: Record<string, AgentOverride>;
 };
 
 const STORE_PATH = "xterax-settings.json";
@@ -194,6 +204,7 @@ const KEY_EDITOR_AUTO_SAVE_DELAY = "editorAutoSaveDelay";
 const KEY_PERMISSIONS = "permissions";
 const KEY_MCP_SERVERS = "mcpServers";
 const KEY_SKILLS_CONFIGS = "skillsConfigs";
+const KEY_AGENT_OVERRIDES = "agentOverrides";
 
 export const TERMINAL_FONT_SIZE_DEFAULT = 14;
 export const TERMINAL_FONT_SIZE_MIN = 8;
@@ -294,6 +305,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   permissions: DEFAULT_PERMISSIONS,
   mcpServers: [],
   skillsConfigs: [],
+  agentOverrides: {},
 };
 
 const store = new LazyStore(STORE_PATH, { defaults: {}, autoSave: 200 });
@@ -469,6 +481,9 @@ export async function loadPreferences(): Promise<Preferences> {
     skillsConfigs:
       get<SkillConfig[]>(KEY_SKILLS_CONFIGS) ??
       DEFAULT_PREFERENCES.skillsConfigs,
+    agentOverrides:
+      get<Record<string, AgentOverride>>(KEY_AGENT_OVERRIDES) ??
+      DEFAULT_PREFERENCES.agentOverrides,
   };
 }
 
@@ -743,6 +758,12 @@ export async function setSkillsConfigs(value: SkillConfig[]): Promise<void> {
   await writePref(KEY_SKILLS_CONFIGS, value);
 }
 
+export async function setAgentOverrides(
+  value: Record<string, AgentOverride>,
+): Promise<void> {
+  await writePref(KEY_AGENT_OVERRIDES, value);
+}
+
 export async function setShortcuts(
   value: Record<ShortcutId, KeyBinding[]> | {},
 ): Promise<void> {
@@ -814,6 +835,7 @@ export async function onPreferencesChange(
     [KEY_PERMISSIONS]: "permissions",
     [KEY_MCP_SERVERS]: "mcpServers",
     [KEY_SKILLS_CONFIGS]: "skillsConfigs",
+    [KEY_AGENT_OVERRIDES]: "agentOverrides",
   };
   // Same-process writes still fire onChange immediately; cross-window writes
   // arrive via the Tauri event emitted by writePref().

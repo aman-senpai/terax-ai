@@ -32,11 +32,20 @@ const ICONS: Record<AgentIconId, typeof CodeIcon> = {
   spark: SparklesIcon,
 };
 
+// Module-level selectors — stable references to avoid Zustand v5
+// useSyncExternalStore consistency-check re-renders on array returns.
+const selectCustomAgents = (s: ReturnType<typeof useAgentsStore.getState>) =>
+  s.customAgents;
+const selectActiveId = (s: ReturnType<typeof useAgentsStore.getState>) =>
+  s.activeId;
+const selectSetActiveId = (s: ReturnType<typeof useAgentsStore.getState>) =>
+  s.setActiveId;
+
 export function AgentSwitcher({ isMiniWindow }: { isMiniWindow?: boolean }) {
   // Subscribe to customAgents + activeId so the trigger updates live.
-  const customAgents = useAgentsStore((s) => s.customAgents);
-  const activeId = useAgentsStore((s) => s.activeId);
-  const setActiveId = useAgentsStore((s) => s.setActiveId);
+  const customAgents = useAgentsStore(selectCustomAgents);
+  const activeId = useAgentsStore(selectActiveId);
+  const setActiveId = useAgentsStore(selectSetActiveId);
 
   const list = useAgentsStore.getState().all();
   void customAgents; // keeps the store subscription alive
@@ -164,6 +173,11 @@ export function AgentSwitcher({ isMiniWindow }: { isMiniWindow?: boolean }) {
           <HugeiconsIcon icon={Settings01Icon} size={12} strokeWidth={1.75} />
           Manage agents…
         </DropdownMenuItem>
+        <div className="px-2 pb-1.5 pt-0.5 text-[10px] text-muted-foreground/60">
+          Tip: type{" "}
+          <code className="rounded bg-muted/40 px-1 font-mono">@</code> in the
+          input to switch agents inline.
+        </div>
       </DropdownMenuContent>
     </DropdownMenu>
   );

@@ -64,9 +64,56 @@ const SUGGESTIONS = [
   },
 ];
 
+// Module-level selectors — stable references so Zustand v5's
+// useSyncExternalStore consistency check doesn't trigger redundant renders
+// on non-primitive (array/object) return values.
+const selectCloseRightPanel = (s: ReturnType<typeof useChatStore.getState>) =>
+  s.closeRightPanel;
+const selectActiveSessionId = (s: ReturnType<typeof useChatStore.getState>) =>
+  s.activeSessionId;
+const selectFocusInput = (s: ReturnType<typeof useChatStore.getState>) =>
+  s.focusInput;
+const selectSessions = (s: ReturnType<typeof useChatStore.getState>) =>
+  s.sessions;
+const selectNewSession = (s: ReturnType<typeof useChatStore.getState>) =>
+  s.newSession;
+const selectSwitchSession = (s: ReturnType<typeof useChatStore.getState>) =>
+  s.switchSession;
+const selectDeleteSession = (s: ReturnType<typeof useChatStore.getState>) =>
+  s.deleteSession;
+const selectHistoryOpen = (s: ReturnType<typeof useChatStore.getState>) =>
+  s.historyOpen;
+const selectToggleHistory = (s: ReturnType<typeof useChatStore.getState>) =>
+  s.toggleHistory;
+const selectPermissionMode = (s: ReturnType<typeof useChatStore.getState>) =>
+  s.permissionMode;
+const selectSetPermissionMode = (s: ReturnType<typeof useChatStore.getState>) =>
+  s.setPermissionMode;
+const selectRenameSession = (s: ReturnType<typeof useChatStore.getState>) =>
+  s.renameSession;
+const selectSelectedModelId = (s: ReturnType<typeof useChatStore.getState>) =>
+  s.selectedModelId;
+const selectAgentTokens = (s: ReturnType<typeof useChatStore.getState>) =>
+  s.agentMeta.tokens;
+const selectAgentLastInputTokens = (
+  s: ReturnType<typeof useChatStore.getState>,
+) => s.agentMeta.lastInputTokens;
+const selectAgentLastCachedTokens = (
+  s: ReturnType<typeof useChatStore.getState>,
+) => s.agentMeta.lastCachedTokens;
+const selectPlanActive = (s: ReturnType<typeof usePlanStore.getState>) =>
+  s.active;
+const selectPlanQueueLen = (s: ReturnType<typeof usePlanStore.getState>) =>
+  s.queue.length;
+const selectPlanDisable = (s: ReturnType<typeof usePlanStore.getState>) =>
+  s.disable;
+const selectOpenaiCompatContextLimit = (
+  s: ReturnType<typeof usePreferencesStore.getState>,
+) => s.openaiCompatibleContextLimit;
+
 export function RightPanel() {
-  const closeRightPanel = useChatStore((s) => s.closeRightPanel);
-  const sessionId = useChatStore((s) => s.activeSessionId);
+  const closeRightPanel = useChatStore(selectCloseRightPanel);
+  const sessionId = useChatStore(selectActiveSessionId);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -92,14 +139,14 @@ export function RightPanel() {
 function Body({ sessionId }: { sessionId: string }) {
   const c = useComposer();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const focusInput = useChatStore((s) => s.focusInput);
-  const sessions = useChatStore((s) => s.sessions);
-  const activeId = useChatStore((s) => s.activeSessionId);
-  const newSession = useChatStore((s) => s.newSession);
-  const switchSession = useChatStore((s) => s.switchSession);
-  const deleteSession = useChatStore((s) => s.deleteSession);
-  const historyOpen = useChatStore((s) => s.historyOpen);
-  const toggleHistory = useChatStore((s) => s.toggleHistory);
+  const focusInput = useChatStore(selectFocusInput);
+  const sessions = useChatStore(selectSessions);
+  const activeId = useChatStore(selectActiveSessionId);
+  const newSession = useChatStore(selectNewSession);
+  const switchSession = useChatStore(selectSwitchSession);
+  const deleteSession = useChatStore(selectDeleteSession);
+  const historyOpen = useChatStore(selectHistoryOpen);
+  const toggleHistory = useChatStore(selectToggleHistory);
 
   const chat = useMemo(() => getOrCreateChat(sessionId), [sessionId]);
   const helpers = useChat<UIMessage>({ chat });
@@ -192,9 +239,9 @@ function Body({ sessionId }: { sessionId: string }) {
 }
 
 function PlanModeStrip() {
-  const active = usePlanStore((s) => s.active);
-  const queueLen = usePlanStore((s) => s.queue.length);
-  const disable = usePlanStore((s) => s.disable);
+  const active = usePlanStore(selectPlanActive);
+  const queueLen = usePlanStore(selectPlanQueueLen);
+  const disable = usePlanStore(selectPlanDisable);
   if (!active) return null;
   return (
     <div className="flex shrink-0 items-center gap-2 border-b border-border/40 bg-muted/40 px-3 py-1.5">
@@ -235,11 +282,11 @@ function Header({
   title: string;
   onNewSession: () => void;
 }) {
-  const historyOpen = useChatStore((s) => s.historyOpen);
-  const toggleHistory = useChatStore((s) => s.toggleHistory);
-  const permissionMode = useChatStore((s) => s.permissionMode);
-  const setPermissionMode = useChatStore((s) => s.setPermissionMode);
-  const renameSession = useChatStore((s) => s.renameSession);
+  const historyOpen = useChatStore(selectHistoryOpen);
+  const toggleHistory = useChatStore(selectToggleHistory);
+  const permissionMode = useChatStore(selectPermissionMode);
+  const setPermissionMode = useChatStore(selectSetPermissionMode);
+  const renameSession = useChatStore(selectRenameSession);
 
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState(title);
@@ -400,15 +447,15 @@ function formatTokens(n: number): string {
 }
 
 function ContextIndicator({ messages }: { messages: UIMessage[] }) {
-  const modelId = useChatStore((s) => s.selectedModelId);
-  const tokens = useChatStore((s) => s.agentMeta.tokens);
-  const lastInput = useChatStore((s) => s.agentMeta.lastInputTokens);
-  const lastCached = useChatStore((s) => s.agentMeta.lastCachedTokens);
+  const modelId = useChatStore(selectSelectedModelId);
+  const tokens = useChatStore(selectAgentTokens);
+  const lastInput = useChatStore(selectAgentLastInputTokens);
+  const lastCached = useChatStore(selectAgentLastCachedTokens);
   const estimated = useMemo(() => estimateTokens(messages), [messages]);
   const used = lastInput > 0 ? lastInput : estimated;
   const reported = tokens.inputTokens + tokens.outputTokens;
   const openaiCompatibleContextLimit = usePreferencesStore(
-    (s) => s.openaiCompatibleContextLimit,
+    selectOpenaiCompatContextLimit,
   );
   const max = getModelContextLimit(modelId, openaiCompatibleContextLimit);
   const modelLabel = useMemo(() => {

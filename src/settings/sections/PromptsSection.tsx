@@ -29,11 +29,13 @@ const CATEGORY_ORDER: Record<PromptCategory, number> = {
   Internal: 3,
 };
 
-const sortedMeta = [...PROMPT_META].sort((a, b) => {
-  const catDiff = CATEGORY_ORDER[a.category] - CATEGORY_ORDER[b.category];
-  if (catDiff !== 0) return catDiff;
-  return a.label.localeCompare(b.label);
-});
+const sortedMeta = [...PROMPT_META]
+  .filter((m) => !m.key.startsWith("agent:"))
+  .sort((a, b) => {
+    const catDiff = CATEGORY_ORDER[a.category] - CATEGORY_ORDER[b.category];
+    if (catDiff !== 0) return catDiff;
+    return a.label.localeCompare(b.label);
+  });
 
 // ---------------------------------------------------------------------------
 // Single prompt editor row
@@ -176,8 +178,13 @@ function PromptEditor({
 // Main section
 // ---------------------------------------------------------------------------
 
+// Module-level selector — stable reference for Zustand v5.
+const selectPromptOverrides = (
+  s: ReturnType<typeof usePreferencesStore.getState>,
+) => s.promptOverrides;
+
 export function PromptsSection() {
-  const promptOverrides = usePreferencesStore((s) => s.promptOverrides);
+  const promptOverrides = usePreferencesStore(selectPromptOverrides);
   const hydrated = usePreferencesStore((s) => s.hydrated);
   const syncedRef = useRef(false);
 
@@ -223,7 +230,7 @@ export function PromptsSection() {
     <div className="flex flex-col gap-6">
       <SectionHeader
         title="Prompts"
-        description="View and override every system prompt, agent persona, and message template used by the AI. Overrides are saved globally and applied immediately."
+        description="View and override system prompts, message templates, and internal prompts. Agent persona prompts are configured in the Agents tab."
       />
 
       {Array.from(groups.entries()).map(([category, metas]) => (

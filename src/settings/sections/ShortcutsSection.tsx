@@ -30,8 +30,13 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
+// Module-level selector — stable reference for Zustand v5.
+const selectShortcuts = (
+  s: ReturnType<typeof usePreferencesStore.getState>,
+) => s.shortcuts;
+
 export function ShortcutsSection() {
-  const userShortcuts = usePreferencesStore((s) => s.shortcuts);
+  const userShortcuts = usePreferencesStore(selectShortcuts);
   const [search, setSearch] = useState("");
   const [recordingId, setRecordingId] = useState<ShortcutId | null>(null);
   const [resetDialogOpen, setResetDialogOpen] = useState(false);

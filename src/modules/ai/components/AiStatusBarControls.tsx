@@ -96,12 +96,29 @@ export function AiStatusBarControls() {
   return null;
 }
 
+// Module-level selectors — stable references to avoid Zustand v5
+// useSyncExternalStore consistency-check re-renders on array/object returns.
+const selectSelectedModelId = (
+  s: ReturnType<typeof useChatStore.getState>,
+) => s.selectedModelId;
+const selectApiKeys = (s: ReturnType<typeof useChatStore.getState>) =>
+  s.apiKeys;
+const selectSetSelectedModelId = (
+  s: ReturnType<typeof useChatStore.getState>,
+) => s.setSelectedModelId;
+const selectFavoriteModelIds = (
+  s: ReturnType<typeof usePreferencesStore.getState>,
+) => s.favoriteModelIds;
+const selectCustomEndpoints = (
+  s: ReturnType<typeof usePreferencesStore.getState>,
+) => s.customEndpoints;
+
 export function ModelDropdown() {
-  const selected = useChatStore((s) => s.selectedModelId);
-  const apiKeys = useChatStore((s) => s.apiKeys);
-  const setSelected = useChatStore((s) => s.setSelectedModelId);
-  const favoriteIds = usePreferencesStore((s) => s.favoriteModelIds);
-  const customEndpoints = usePreferencesStore((s) => s.customEndpoints);
+  const selected = useChatStore(selectSelectedModelId);
+  const apiKeys = useChatStore(selectApiKeys);
+  const setSelected = useChatStore(selectSetSelectedModelId);
+  const favoriteIds = usePreferencesStore(selectFavoriteModelIds);
+  const customEndpoints = usePreferencesStore(selectCustomEndpoints);
   const lmstudioModelId = usePreferencesStore((s) => s.lmstudioModelId);
   const mlxModelId = usePreferencesStore((s) => s.mlxModelId);
   const ollamaModelId = usePreferencesStore((s) => s.ollamaModelId);

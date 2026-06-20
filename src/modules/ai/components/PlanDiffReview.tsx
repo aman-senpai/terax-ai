@@ -32,11 +32,21 @@ function diffStats(
   return { added, removed };
 }
 
+// Module-level selectors — stable references for Zustand v5.
+const selectPlanQueue = (s: ReturnType<typeof usePlanStore.getState>) =>
+  s.queue;
+const selectPlanRemoveOne = (s: ReturnType<typeof usePlanStore.getState>) =>
+  s.removeOne;
+const selectPlanClear = (s: ReturnType<typeof usePlanStore.getState>) =>
+  s.clear;
+const selectPlanApplyAll = (s: ReturnType<typeof usePlanStore.getState>) =>
+  s.applyAll;
+
 export function PlanDiffReview() {
-  const queue = usePlanStore((s) => s.queue);
-  const removeOne = usePlanStore((s) => s.removeOne);
-  const clear = usePlanStore((s) => s.clear);
-  const applyAll = usePlanStore((s) => s.applyAll);
+  const queue = usePlanStore(selectPlanQueue);
+  const removeOne = usePlanStore(selectPlanRemoveOne);
+  const clear = usePlanStore(selectPlanClear);
+  const applyAll = usePlanStore(selectPlanApplyAll);
   const [busy, setBusy] = useState(false);
 
   if (queue.length === 0) return null;

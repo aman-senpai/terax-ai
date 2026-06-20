@@ -28,12 +28,17 @@ import {
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useEffect, useState } from "react";
 
+// Module-level selector — stable reference for Zustand v5.
+const selectSkillsConfigs = (
+  s: ReturnType<typeof usePreferencesStore.getState>,
+) => s.skillsConfigs;
+
 // ---------------------------------------------------------------------------
 // Main section
 // ---------------------------------------------------------------------------
 
 export function SkillsSection() {
-  const configs = usePreferencesStore((s) => s.skillsConfigs);
+  const configs = usePreferencesStore(selectSkillsConfigs);
   const [editing, setEditing] = useState<SkillConfig | null>(null);
   const [viewing, setViewing] = useState<SkillConfig | null>(null);
 
@@ -41,9 +46,7 @@ export function SkillsSection() {
     <div className="flex flex-col gap-7">
       <SectionHeader
         title="Agent Skills"
-        description="Skills provide the AI with specialized instructions for specific
-        tasks. Enable or disable skills, or create custom ones with inline
-        content."
+        description="Skills provide the AI with specialized instructions for specific tasks. Enable, disable, or create custom skills. Invoke skills in the AI input with /."
       />
 
       <section className="flex flex-col gap-2">

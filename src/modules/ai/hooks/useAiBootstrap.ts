@@ -14,6 +14,19 @@ import { useAgentsStore } from "../store/agentsStore";
 import { useChatStore } from "../store/chatStore";
 import { useSnippetsStore } from "../store/snippetsStore";
 
+// Module-level selectors — stable references for Zustand v5.
+const selectApiKeys = (s: ReturnType<typeof useChatStore.getState>) =>
+  s.apiKeys;
+const selectCustomEndpoints = (
+  s: ReturnType<typeof usePreferencesStore.getState>,
+) => s.customEndpoints;
+const selectPromptOverrides = (
+  s: ReturnType<typeof usePreferencesStore.getState>,
+) => s.promptOverrides;
+const selectMcpServers = (
+  s: ReturnType<typeof usePreferencesStore.getState>,
+) => s.mcpServers;
+
 /**
  * Startup wiring for the AI subsystem: loads provider keys (and keeps them in
  * sync), hydrates the preference store and mirrors the default model, hydrates
@@ -24,7 +37,7 @@ export function useAiBootstrap(): {
   hasComposer: boolean;
   keysLoaded: boolean;
 } {
-  const apiKeys = useChatStore((s) => s.apiKeys);
+  const apiKeys = useChatStore(selectApiKeys);
   const setApiKeys = useChatStore((s) => s.setApiKeys);
   const setCustomEndpointKeys = useChatStore((s) => s.setCustomEndpointKeys);
   const setSelectedModelId = useChatStore((s) => s.setSelectedModelId);
@@ -48,7 +61,7 @@ export function useAiBootstrap(): {
   const openaiCompatibleBaseURL = usePreferencesStore(
     (s) => s.openaiCompatibleBaseURL,
   );
-  const customEndpoints = usePreferencesStore((s) => s.customEndpoints);
+  const customEndpoints = usePreferencesStore(selectCustomEndpoints);
   const hasLocalModel =
     (lmstudioBaseURL.trim().length > 0 && lmstudioModelId.trim().length > 0) ||
     (mlxBaseURL.trim().length > 0 && mlxModelId.trim().length > 0) ||
@@ -112,7 +125,7 @@ export function useAiBootstrap(): {
   }, [hydrateSessions]);
 
   // Sync prompt overrides from settings → prompts module.
-  const promptOverrides = usePreferencesStore((s) => s.promptOverrides);
+  const promptOverrides = usePreferencesStore(selectPromptOverrides);
   useEffect(() => {
     if (!prefsHydrated) return;
     if (Object.keys(promptOverrides).length > 0) {
@@ -121,7 +134,7 @@ export function useAiBootstrap(): {
   }, [prefsHydrated, promptOverrides]);
 
   // Sync MCP servers: start/stop processes and cache discovered tools.
-  const mcpServers = usePreferencesStore((s) => s.mcpServers);
+  const mcpServers = usePreferencesStore(selectMcpServers);
   useEffect(() => {
     if (!prefsHydrated) return;
     let cancelled = false;

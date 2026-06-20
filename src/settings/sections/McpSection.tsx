@@ -26,12 +26,17 @@ import {
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useEffect, useState } from "react";
 
+// Module-level selector — stable reference for Zustand v5.
+const selectMcpServers = (
+  s: ReturnType<typeof usePreferencesStore.getState>,
+) => s.mcpServers;
+
 // ---------------------------------------------------------------------------
 // Main section
 // ---------------------------------------------------------------------------
 
 export function McpSection() {
-  const servers = usePreferencesStore((s) => s.mcpServers);
+  const servers = usePreferencesStore(selectMcpServers);
   const [editing, setEditing] = useState<McpServerConfig | null>(null);
 
   return (

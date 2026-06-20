@@ -8,6 +8,7 @@ import {
   getClaudeCodeDirectivePrompt,
   getInitCommandPrompt,
 } from "./prompts";
+import type { SkillConfig } from "@/modules/skills/types";
 
 /**
  * Outcome of intercepting a slash command from the composer.
@@ -63,7 +64,18 @@ export function wrapWithCommandMarker(prompt: string, name: string): string {
   return `<xterax-command name="${name}" />\n\n${prompt}`;
 }
 
-export function tryRunSlashCommand(input: string): SlashOutcome {
+/**
+ * Try to match a skill name from the enabled skills configs.
+ * Returns the skill if found, null otherwise.
+ */
+function findSkill(name: string, skills: SkillConfig[]): SkillConfig | null {
+  return skills.find((s) => s.enabled && s.name === name) ?? null;
+}
+
+export function tryRunSlashCommand(
+  input: string,
+  skills?: SkillConfig[],
+): SlashOutcome {
   const trimmed = input.trim();
   const lead = trimmed[0];
   if (lead !== "/" && lead !== "#") return { kind: "none" };
@@ -102,7 +114,22 @@ export function tryRunSlashCommand(input: string): SlashOutcome {
         commandName: "claude-code",
       };
     }
-    default:
+    default: {
+      // Check if it matches an enabled skill
+      if (skills && lead === "/") {
+        const skill = findSkill(head, skills);
+        if (skill) {
+          const skillPrompt =
+            skill.content ??
+            `Activate the **${skill.name}** skill: ${skill.description}`;
+          return {
+            kind: "send-prompt",
+            prompt: `<skill-activation name="${skill.name}">\n${skillPrompt}\n</skill-activation>\n\n${tail}`,
+            commandName: skill.name,
+          };
+        }
+      }
       return { kind: "none" };
+    }
   }
 }

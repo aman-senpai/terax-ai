@@ -1,5 +1,5 @@
 import { LazyStore } from "@tauri-apps/plugin-store";
-import { getAgentPrompt } from "./prompts";
+import { getAgentPrompt, type PromptKey } from "./prompts";
 
 export type AgentIconId =
   | "coder"
@@ -16,50 +16,147 @@ export type Agent = {
   instructions: string;
   icon: AgentIconId;
   builtIn: boolean;
+  /** Tool groups to allow. null = all tools allowed. */
+  toolAllowlist: string[] | null;
+  /** Glob patterns for allowed shell commands. */
+  shellAllowlist: string[];
 };
+
+// ---------------------------------------------------------------------------
+// Tool group constants for allowlist UI
+// ---------------------------------------------------------------------------
+
+export type ToolGroup = {
+  id: string;
+  label: string;
+  description: string;
+  tools: string[];
+};
+
+export const TOOL_GROUPS: readonly ToolGroup[] = [
+  {
+    id: "fs",
+    label: "File System",
+    description: "read_file, list_directory, write_file, create_directory",
+    tools: ["read_file", "list_directory", "write_file", "create_directory"],
+  },
+  {
+    id: "edit",
+    label: "Edit",
+    description: "edit, multi_edit",
+    tools: ["edit", "multi_edit"],
+  },
+  {
+    id: "search",
+    label: "Search",
+    description: "grep, glob",
+    tools: ["grep", "glob"],
+  },
+  {
+    id: "shell",
+    label: "Shell",
+    description: "bash_run, bash_background, bash_logs, bash_list, bash_kill",
+    tools: ["bash_run", "bash_background", "bash_logs", "bash_list", "bash_kill"],
+  },
+  {
+    id: "subagent",
+    label: "Subagent",
+    description: "run_subagent",
+    tools: ["run_subagent"],
+  },
+  {
+    id: "terminal",
+    label: "Terminal",
+    description:
+      "get_terminal_output, suggest_command, open_preview",
+    tools: ["get_terminal_output", "suggest_command", "open_preview"],
+  },
+  {
+    id: "todo",
+    label: "Todo",
+    description: "todo_write",
+    tools: ["todo_write"],
+  },
+  {
+    id: "agent_managed",
+    label: "Agent Managed",
+    description: "spawn_coding_agent, send_to_agent, read_agent_output",
+    tools: [
+      "spawn_coding_agent",
+      "send_to_agent",
+      "read_agent_output",
+    ],
+  },
+  {
+    id: "mcp",
+    label: "MCP",
+    description: "MCP server tools (dynamic)",
+    tools: ["mcp__*"],
+  },
+] as const;
+
+// ---------------------------------------------------------------------------
+// Built-in agent definitions
+// ---------------------------------------------------------------------------
 
 export const BUILTIN_AGENTS: readonly Agent[] = [
   {
     id: "builtin:coder",
     name: "Coder",
     description: "General-purpose coding assistant. Writes, edits, and runs.",
-    icon: "coder",
+    icon: "coder" as AgentIconId,
     builtIn: true,
     instructions: getAgentPrompt("coder"),
+    toolAllowlist: null,
+    shellAllowlist: ["*"],
   },
   {
     id: "builtin:architect",
     name: "Architect",
     description: "Design and tradeoffs. Plans before code.",
-    icon: "architect",
+    icon: "architect" as AgentIconId,
     builtIn: true,
     instructions: getAgentPrompt("architect"),
+    toolAllowlist: null,
+    shellAllowlist: ["*"],
   },
   {
     id: "builtin:reviewer",
     name: "Code Reviewer",
     description: "Reviews diffs for correctness, perf, security.",
-    icon: "reviewer",
+    icon: "reviewer" as AgentIconId,
     builtIn: true,
     instructions: getAgentPrompt("reviewer"),
+    toolAllowlist: null,
+    shellAllowlist: ["*"],
   },
   {
     id: "builtin:security",
     name: "Security",
     description: "Threat-models changes and flags vulns.",
-    icon: "security",
+    icon: "security" as AgentIconId,
     builtIn: true,
     instructions: getAgentPrompt("security"),
+    toolAllowlist: null,
+    shellAllowlist: ["*"],
   },
   {
     id: "builtin:designer",
     name: "Designer",
     description: "UI/UX critique and refinement.",
-    icon: "designer",
+    icon: "designer" as AgentIconId,
     builtIn: true,
     instructions: getAgentPrompt("designer"),
+    toolAllowlist: null,
+    shellAllowlist: ["*"],
   },
-] as const;
+];
+
+/** Prompt key for a built-in agent's persona. */
+export function builtinAgentPromptKey(agentId: string): PromptKey {
+  const id = agentId.startsWith("builtin:") ? agentId.slice(8) : agentId;
+  return `agent:${id}` as PromptKey;
+}
 
 const STORE_PATH = "xterax-agents.json";
 const KEY_CUSTOM = "customAgents";
@@ -78,8 +175,25 @@ export async function loadAgents(): Promise<LoadedAgents> {
   let custom: Agent[] | undefined;
   let activeId: string | undefined;
   for (const [k, v] of entries) {
-    if (k === KEY_CUSTOM) custom = v as Agent[];
-    else if (k === KEY_ACTIVE) activeId = v as string;
+    if (k === KEY_CUSTOM) {
+      const raw = v as Array<Partial<Agent> & { [k: string]: unknown }>;
+      // Normalize legacy agents that lack the toolAllowlist / shellAllowlist fields
+      custom = raw.map(
+        (a): Agent => ({
+          id: a.id ?? newAgentId(),
+          name: a.name ?? "Unnamed",
+          description: a.description ?? "",
+          instructions: a.instructions ?? "",
+          icon: a.icon ?? "spark",
+          builtIn: a.builtIn ?? false,
+          toolAllowlist:
+            a.toolAllowlist === undefined ? null : a.toolAllowlist,
+          shellAllowlist: a.shellAllowlist ?? [],
+        }),
+      );
+    } else if (k === KEY_ACTIVE) {
+      activeId = v as string;
+    }
   }
   return { custom: custom ?? [], activeId: activeId ?? BUILTIN_AGENTS[0].id };
 }

@@ -51,6 +51,11 @@ type Props = {
 const SHORTCUTS_BY_ID = new Map(SHORTCUTS.map((s) => [s.id, s]));
 const THEME_PREVIEW_DELAY_MS = 140;
 
+// Module-level selector — stable reference for Zustand v5.
+const selectShortcuts = (
+  s: ReturnType<typeof usePreferencesStore.getState>,
+) => s.shortcuts;
+
 export function CommandPalette({
   open,
   onOpenChange,
@@ -63,7 +68,7 @@ export function CommandPalette({
   const [query, setQuery] = useState("");
   const [value, setValue] = useState("");
   const [page, setPage] = useState<"root" | "themes">("root");
-  const userShortcuts = usePreferencesStore((s) => s.shortcuts);
+  const userShortcuts = usePreferencesStore(selectShortcuts);
   const { themeId, customThemes, setThemeId, previewThemeId } = useTheme();
 
   const parsed = parseQuery(query, initialMode);

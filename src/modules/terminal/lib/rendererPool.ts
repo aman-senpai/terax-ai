@@ -17,7 +17,6 @@ import {
 
 export const POOL_MAX_SIZE = 5;
 const FIT_DEBOUNCE_MS = 8;
-const PTY_RESIZE_DEBOUNCE_MS = 256;
 const SNAPSHOT_SCROLLBACK_CAP = 5_000;
 
 export type SlotAdapter = {
@@ -601,8 +600,12 @@ function setupResizeObserver(slot: Slot, p: AcquireParams): void {
       slot.lastW = w;
       slot.lastH = h;
       slot.fitAddon.fit();
-      if (slot.ptyTimer) clearTimeout(slot.ptyTimer);
-      slot.ptyTimer = setTimeout(flushPty, PTY_RESIZE_DEBOUNCE_MS);
+      // Send SIGWINCH inline — the outer fit timer (FIT_DEBOUNCE_MS)
+      // already coalesces resize storms. Delaying the PTY resize after
+      // fit() leaves xterm's reflowed buffer out of sync with the shell's
+      // idea of the cursor position, causing prompt duplication when the
+      // shell redraws post-SIGWINCH on top of a reflowed grid.
+      flushPty();
     }, FIT_DEBOUNCE_MS);
   });
   slot.observer.observe(container);

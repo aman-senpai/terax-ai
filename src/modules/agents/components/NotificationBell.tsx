@@ -115,13 +115,23 @@ function NotificationRow({
   );
 }
 
+// Module-level selectors — stable references for Zustand v5.
+const selectAgentSessions = (
+  s: ReturnType<typeof useAgentStore.getState>,
+) => s.sessions;
+const selectLocalAgent = (s: ReturnType<typeof useAgentStore.getState>) =>
+  s.localAgent;
+const selectNotifications = (
+  s: ReturnType<typeof useAgentStore.getState>,
+) => s.notifications;
+
 export function NotificationBell({ onActivate, onActivateLocal }: Props) {
   const [open, setOpen] = useState(false);
   const [hooksReady, setHooksReady] = useState<boolean | null>(null);
   const [installing, setInstalling] = useState(false);
-  const sessions = useAgentStore((s) => s.sessions);
-  const localAgent = useAgentStore((s) => s.localAgent);
-  const notifications = useAgentStore((s) => s.notifications);
+  const sessions = useAgentStore(selectAgentSessions);
+  const localAgent = useAgentStore(selectLocalAgent);
+  const notifications = useAgentStore(selectNotifications);
   const markAllRead = useAgentStore((s) => s.markAllRead);
 
   const active = useMemo(() => Object.values(sessions), [sessions]);

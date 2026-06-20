@@ -18,16 +18,16 @@ import {
   getCaretOffset,
   setCaretOffset,
   textOffsetToDom,
-  insertFileChip,
   insertSnippetChip,
+  insertFileChip,
   insertTextAtCaret,
   sanitizeContentEditable,
 } from "../lib/contenteditable";
 import { SLASH_COMMANDS } from "../lib/slashCommands";
 import { useChatStore } from "../store/chatStore";
 import { useSnippetsStore } from "../store/snippetsStore";
+import { useAgentsStore } from "../store/agentsStore";
 import { ChipsRow } from "./ChipsRow";
-import { FilePickerContent } from "./FilePicker";
 import { SnippetPickerContent, type PickerItem } from "./SnippetPicker";
 import { Button } from "@/components/ui/button";
 import {
@@ -36,6 +36,7 @@ import {
   StopCircleIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import { usePreferencesStore } from "@/modules/settings/preferences";
 
 type SnippetTrigger = {
   start: number;
@@ -44,7 +45,7 @@ type SnippetTrigger = {
   char: "#" | "/";
 };
 
-type FileTrigger = {
+type AgentTrigger = {
   start: number;
   end: number;
   query: string;
@@ -69,23 +70,41 @@ function detectSnippetTrigger(
   return null;
 }
 
-function detectFileTrigger(value: string, caret: number): FileTrigger | null {
+function detectAgentTrigger(value: string, caret: number): AgentTrigger | null {
   for (let i = caret - 1; i >= 0; i--) {
     const ch = value[i];
     if (ch === "@") {
       const prev = i === 0 ? " " : value[i - 1];
       if (!/\s/.test(prev)) return null;
       const slice = value.slice(i + 1, caret);
-      return { start: i, end: caret, query: slice };
+      return { start: i, end: caret, query: slice.toLowerCase() };
     }
     if (/\s/.test(ch)) return null;
   }
   return null;
 }
 
+// Module-level selectors so Zustand v5's useCallback(() => selector(getState()),
+// [api, selector]) sees a stable `selector` reference across renders. Inline
+// arrows would recreate getSnapshot every render, and together with
+// useSyncExternalStore's consistency check this triggers infinite loops when
+// the selected value is a non-primitive (array/object).
+const selectSnippets = (s: ReturnType<typeof useSnippetsStore.getState>) =>
+  s.snippets;
+const selectSkillsConfigs = (
+  s: ReturnType<typeof usePreferencesStore.getState>,
+) => s.skillsConfigs;
+const selectAgentsAll = (s: ReturnType<typeof useAgentsStore.getState>) =>
+  s.all();
+const selectSetActiveId = (s: ReturnType<typeof useAgentsStore.getState>) =>
+  s.setActiveId;
+
 export function AiComposerInput() {
   const c = useComposer();
-  const snippets = useSnippetsStore((s) => s.snippets);
+  const snippets = useSnippetsStore(selectSnippets);
+  const skillsConfigs = usePreferencesStore(selectSkillsConfigs);
+  const agents = useAgentsStore(selectAgentsAll);
+  const setActiveAgentId = useAgentsStore(selectSetActiveId);
   const workspaceRoot = useChatStore((s) => s.live.getWorkspaceRoot());
   const editorRef = useRef<HTMLDivElement | null>(null);
   // Keep composer's textareaRef pointed at our editor for focus / submit.
@@ -95,20 +114,20 @@ export function AiComposerInput() {
   }, [editorRef]);
 
   const [trigger, setTrigger] = useState<SnippetTrigger | null>(null);
-  const [fileTrigger, setFileTrigger] = useState<FileTrigger | null>(null);
+  const [agentTrigger, setAgentTrigger] = useState<AgentTrigger | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
-  const workspaceFiles = useWorkspaceFiles(workspaceRoot, fileTrigger !== null);
+  const workspaceFiles = useWorkspaceFiles(workspaceRoot, agentTrigger !== null);
 
   const [fileQuery, setFileQuery] = useState("");
   useEffect(() => {
-    if (!fileTrigger) {
+    if (!agentTrigger) {
       setFileQuery("");
       return;
     }
-    const q = fileTrigger.query;
+    const q = agentTrigger.query;
     const t = window.setTimeout(() => setFileQuery(q), 50);
     return () => window.clearTimeout(t);
-  }, [fileTrigger]);
+  }, [agentTrigger]);
 
   // Sync editor DOM when value changes externally (e.g. submit clears it).
   const syncing = useRef(false);
@@ -170,7 +189,7 @@ export function AiComposerInput() {
     const el = editorRef.current;
     if (!el) {
       setTrigger(null);
-      setFileTrigger(null);
+      setAgentTrigger(null);
       return;
     }
     sanitizeContentEditable(el);
@@ -179,7 +198,7 @@ export function AiComposerInput() {
     // Keep c.value in sync (submit reads from it).
     c.setValue(text);
     setTrigger(detectSnippetTrigger(text, caret));
-    setFileTrigger(detectFileTrigger(text, caret));
+    setAgentTrigger(detectAgentTrigger(text, caret));
   };
 
   // updateTrigger is called directly from onInput — no effect needed.
@@ -187,27 +206,44 @@ export function AiComposerInput() {
   const filteredItems = useMemo<PickerItem[]>(() => {
     if (!trigger) return [];
     const q = trigger.query;
+
+    if (trigger.char === "#") {
+      // # shows snippets only
+      return snippets
+        .filter(
+          (s) =>
+            !q ||
+            s.handle.includes(q) ||
+            s.name.toLowerCase().includes(q) ||
+            s.description.toLowerCase().includes(q),
+        )
+        .map((snippet) => ({ kind: "snippet", snippet }));
+    }
+
+    // / shows commands + enabled skills
     const cmdItems: PickerItem[] = Object.values(SLASH_COMMANDS)
       .filter(
         (c) => !q || c.name.includes(q) || c.label.toLowerCase().includes(q),
       )
       .map((command) => ({ kind: "command", command }));
-    if (trigger.char === "/") return cmdItems;
-    const snipItems: PickerItem[] = snippets
+
+    const enabledSkills = skillsConfigs.filter((s) => s.enabled);
+    const skillItems: PickerItem[] = enabledSkills
       .filter(
         (s) =>
           !q ||
-          s.handle.includes(q) ||
-          s.name.toLowerCase().includes(q) ||
+          s.name.includes(q) ||
           s.description.toLowerCase().includes(q),
       )
-      .map((snippet) => ({ kind: "snippet", snippet }));
-    return [...cmdItems, ...snipItems];
-  }, [trigger, snippets]);
+      .map((skill) => ({ kind: "skill", skill }));
 
-  const FILE_PICKER_CAP = 30;
+    return [...cmdItems, ...skillItems];
+  }, [trigger, snippets, skillsConfigs]);
+
+  // Agent + file items for @ trigger
+  const FILE_PICKER_CAP = 20;
   const filteredFiles = useMemo<string[]>(() => {
-    if (!fileTrigger) return [];
+    if (!agentTrigger) return [];
     const q = fileQuery.toLowerCase();
     if (!q) return workspaceFiles.files.slice(0, FILE_PICKER_CAP);
     const out: string[] = [];
@@ -218,20 +254,102 @@ export function AiComposerInput() {
       }
     }
     return out;
-  }, [fileTrigger, fileQuery, workspaceFiles.files]);
+  }, [agentTrigger, fileQuery, workspaceFiles.files]);
 
-  const fileTriggerOpen = fileTrigger !== null;
+  const filteredAgentsAndFiles = useMemo<PickerItem[]>(() => {
+    if (!agentTrigger) return [];
+    const q = agentTrigger.query;
+    // Files first, then agents
+    const fileItems: PickerItem[] = filteredFiles.map((f) => ({
+      kind: "file" as const,
+      filePath: f,
+    }));
+    const agentItems: PickerItem[] = agents
+      .filter(
+        (a) =>
+          !q ||
+          a.name.toLowerCase().includes(q) ||
+          a.description.toLowerCase().includes(q),
+      )
+      .map((agent) => ({ kind: "agent" as const, agent }));
+    return [...fileItems, ...agentItems];
+  }, [agentTrigger, agents, filteredFiles]);
+
+  const agentTriggerOpen = agentTrigger !== null;
   const snippetTriggerOpen = trigger !== null;
   useEffect(() => {
     setActiveIndex(0);
-  }, [snippetTriggerOpen, fileTriggerOpen, fileQuery]);
+  }, [snippetTriggerOpen, agentTriggerOpen, fileQuery]);
 
-  const pickerOpen = trigger !== null || fileTrigger !== null;
+  const pickerOpen = trigger !== null || agentTrigger !== null;
+
+  // Determine which items to show
+  const activeItems = agentTrigger ? filteredAgentsAndFiles : filteredItems;
 
   const onPickItem = (item: PickerItem) => {
-    if (!trigger) return;
     const el = editorRef.current;
     if (!el) return;
+
+    if (item.kind === "agent") {
+      // Switch active agent
+      setActiveAgentId(item.agent.id);
+      // Replace @query text with nothing (clean removal)
+      if (agentTrigger) {
+        const sel = window.getSelection();
+        if (sel?.rangeCount) {
+          const r = sel.getRangeAt(0);
+          const startPos = textOffsetToDom(el, agentTrigger.start);
+          const endPos = textOffsetToDom(el, agentTrigger.end);
+          if (startPos && endPos) {
+            r.setStart(startPos.node, startPos.offset);
+            r.setEnd(endPos.node, endPos.offset);
+            r.deleteContents();
+            r.collapse(false);
+            sel.removeAllRanges();
+            sel.addRange(r);
+          }
+        }
+        syncing.current = true;
+        c.setValue(editorToText(el));
+        setAgentTrigger(null);
+      }
+      setActiveIndex(0);
+      requestAnimationFrame(() => {
+        if (!editorRef.current) return;
+        editorRef.current.focus();
+      });
+      return;
+    }
+
+    if (item.kind === "file") {
+      // Attach file via @ picker
+      if (!agentTrigger || !workspaceRoot) return;
+      const fileName = item.filePath.split("/").pop() || item.filePath;
+      const cursorAfter = insertFileChip(
+        el,
+        agentTrigger.start,
+        agentTrigger.end,
+        fileName,
+      );
+      syncing.current = true;
+      c.setValue(editorToText(el));
+      setAgentTrigger(null);
+      setActiveIndex(0);
+
+      const fullPath = workspaceRoot.endsWith("/")
+        ? `${workspaceRoot}${item.filePath}`
+        : `${workspaceRoot}/${item.filePath}`;
+      void c.attachFileByPath(fullPath);
+
+      requestAnimationFrame(() => {
+        if (!editorRef.current) return;
+        editorRef.current.focus();
+        setCaretOffset(editorRef.current, cursorAfter);
+      });
+      return;
+    }
+
+    if (!trigger) return;
 
     let cursorAfter = trigger.end;
     if (item.kind === "snippet") {
@@ -242,6 +360,26 @@ export function AiComposerInput() {
         trigger.end,
         item.snippet.handle,
       );
+    } else if (item.kind === "skill") {
+      // Insert /skill-name as inline text
+      const skillText = `/${item.skill.name}`;
+      el.focus();
+      const sel = window.getSelection();
+      if (sel?.rangeCount) {
+        const r = sel.getRangeAt(0);
+        const startPos = textOffsetToDom(el, trigger.start);
+        const endPos = textOffsetToDom(el, trigger.end);
+        if (startPos && endPos) {
+          r.setStart(startPos.node, startPos.offset);
+          r.setEnd(endPos.node, endPos.offset);
+          r.deleteContents();
+          r.insertNode(document.createTextNode(skillText + " "));
+          r.collapse(false);
+          sel.removeAllRanges();
+          sel.addRange(r);
+        }
+      }
+      cursorAfter = trigger.start + skillText.length + 1;
     } else {
       c.addCommand(item.command);
       // For commands, insert [/name] inline text (chip-able later).
@@ -278,45 +416,8 @@ export function AiComposerInput() {
     });
   };
 
-  const onPickFile = async (filePath: string) => {
-    if (!fileTrigger || !workspaceRoot) return;
-    const el = editorRef.current;
-    if (!el) return;
-
-    const fileName = filePath.split("/").pop() || filePath;
-    // Replace @query text with an inline file chip in the DOM.
-    const cursorAfter = insertFileChip(
-      el,
-      fileTrigger.start,
-      fileTrigger.end,
-      fileName,
-    );
-    // Update React state from the DOM.
-    syncing.current = true;
-    c.setValue(editorToText(el));
-
-    setFileTrigger(null);
-    setActiveIndex(0);
-
-    const fullPath = workspaceRoot.endsWith("/")
-      ? `${workspaceRoot}${filePath}`
-      : `${workspaceRoot}/${filePath}`;
-    await c.attachFileByPath(fullPath);
-
-    requestAnimationFrame(() => {
-      if (!editorRef.current) return;
-      editorRef.current.focus();
-      setCaretOffset(editorRef.current, cursorAfter);
-    });
-  };
-
   const pickActive = () => {
-    if (fileTrigger) {
-      const file = filteredFiles[activeIndex];
-      if (file) void onPickFile(file);
-      return;
-    }
-    const it = filteredItems[activeIndex];
+    const it = activeItems[activeIndex];
     if (it) onPickItem(it);
   };
 
@@ -461,7 +562,7 @@ export function AiComposerInput() {
                 // Autocomplete ghost text takes priority (Tab or Right arrow to accept, Esc to dismiss).
                 if (handleAutocompleteKey(e)) return;
                 if (pickerOpen) {
-                  const items = fileTrigger ? filteredFiles : filteredItems;
+                  const items = activeItems;
                   if (e.key === "ArrowDown") {
                     e.preventDefault();
                     setActiveIndex((i) =>
@@ -483,17 +584,16 @@ export function AiComposerInput() {
                   }
                   if (e.key === "Escape") {
                     e.preventDefault();
-                    if (fileTrigger) {
+                    if (agentTrigger) {
                       const el = editorRef.current;
                       if (el) {
                         const r = document.createRange();
-                        const s = textOffsetToDom(el, fileTrigger.start);
-                        const en = textOffsetToDom(el, fileTrigger.end);
+                        const s = textOffsetToDom(el, agentTrigger.start);
+                        const en = textOffsetToDom(el, agentTrigger.end);
                         if (s && en) {
                           r.setStart(s.node, s.offset);
                           r.setEnd(en.node, en.offset);
                           r.deleteContents();
-                          // Insert a space if both sides are adjacent to non-space
                           r.insertNode(document.createTextNode(" "));
                           r.collapse(false);
                           const sel = window.getSelection();
@@ -507,7 +607,7 @@ export function AiComposerInput() {
                       c.setValue(
                         editorToText(el ?? document.createElement("div")),
                       );
-                      setFileTrigger(null);
+                      setAgentTrigger(null);
                     } else {
                       setTrigger(null);
                     }
@@ -552,7 +652,7 @@ export function AiComposerInput() {
                 className="pointer-events-none absolute left-0 right-8 top-0 text-[13px] leading-relaxed text-muted-foreground/60 select-none truncate"
                 aria-hidden
               >
-                Ask Xterax anything — # for snippets, @ for files
+                Ask Xterax anything — / for skills, @ for agents & files, # for snippets
               </span>
             )}
 
@@ -634,24 +734,12 @@ export function AiComposerInput() {
             )}
           </div>
         </PopoverAnchor>
-        {fileTrigger ? (
-          <FilePickerContent
-            files={filteredFiles}
-            activeIndex={activeIndex}
-            indexing={workspaceFiles.indexing}
-            truncated={workspaceFiles.truncated}
-            hasWorkspace={workspaceRoot !== null}
-            onPick={(f) => void onPickFile(f)}
-            onHover={setActiveIndex}
-          />
-        ) : (
-          <SnippetPickerContent
-            items={filteredItems}
-            activeIndex={activeIndex}
-            onPick={onPickItem}
-            onHover={setActiveIndex}
-          />
-        )}
+        <SnippetPickerContent
+          items={activeItems}
+          activeIndex={activeIndex}
+          onPick={onPickItem}
+          onHover={setActiveIndex}
+        />
       </Popover>
 
       {voiceRow.mounted && (

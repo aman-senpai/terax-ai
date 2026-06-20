@@ -48,8 +48,13 @@ const POLICY_OPTIONS: { value: ToolApprovalPolicy; label: string }[] = [
   { value: "deny", label: "Always deny" },
 ];
 
+// Module-level selector — stable reference for Zustand v5.
+const selectPermissions = (
+  s: ReturnType<typeof usePreferencesStore.getState>,
+) => s.permissions;
+
 export function PermissionsSection() {
-  const permissions = usePreferencesStore((s) => s.permissions);
+  const permissions = usePreferencesStore(selectPermissions);
 
   const updateToolPermission = (
     tool: keyof ToolPermissions,

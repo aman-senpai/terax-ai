@@ -42,6 +42,11 @@ type Props = {
   compact?: boolean;
 };
 
+// Module-level selector — stable reference for Zustand v5.
+const selectShortcuts = (
+  s: ReturnType<typeof usePreferencesStore.getState>,
+) => s.shortcuts;
+
 export const SearchInline = forwardRef<SearchInlineHandle, Props>(
   function SearchInline({ target, compact }, ref) {
     const [q, setQ] = useState("");
@@ -57,7 +62,7 @@ export const SearchInline = forwardRef<SearchInlineHandle, Props>(
       el.focus();
     }, []);
 
-    const userShortcuts = usePreferencesStore((s) => s.shortcuts);
+    const userShortcuts = usePreferencesStore(selectShortcuts);
 
     const shortcutText = useMemo(() => {
       const s = SHORTCUTS.find((s) => s.id === "search.focus");
