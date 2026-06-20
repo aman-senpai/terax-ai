@@ -11,6 +11,7 @@ import {
   ShieldIcon,
   UserMultiple02Icon,
   KeyboardIcon,
+  TextIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
@@ -22,6 +23,7 @@ import { ModelsSection } from "./sections/ModelsSection";
 import { PermissionsSection } from "./sections/PermissionsSection";
 import { ShortcutsSection } from "./sections/ShortcutsSection";
 import { ThemesSection } from "./sections/ThemesSection";
+import { PromptsSection } from "./sections/PromptsSection";
 
 const TABS: {
   id: SettingsTab;
@@ -61,6 +63,12 @@ const TABS: {
     component: AgentsSection,
   },
   {
+    id: "prompts",
+    label: "Prompts",
+    icon: TextIcon,
+    component: PromptsSection,
+  },
+  {
     id: "about",
     label: "About",
     icon: InformationCircleIcon,
@@ -75,6 +83,7 @@ const VALID_TABS: SettingsTab[] = [
   "permissions",
   "models",
   "agents",
+  "prompts",
   "about",
 ];
 

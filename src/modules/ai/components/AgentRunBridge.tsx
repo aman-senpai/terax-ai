@@ -123,7 +123,10 @@ function Bridge({ sessionId, openAiDiffTab, closeAiDiffTab }: BridgeProps) {
 
   useEffect(() => {
     let runStatus: AgentRunStatus;
-    if (approvalsPending > 0) runStatus = "awaiting-approval";
+    // Only signal "awaiting-approval" when the user must actually act —
+    // auto-approve / read-only modes resolve tools without user interaction.
+    if (approvalsPending > 0 && permissionMode === "default")
+      runStatus = "awaiting-approval";
     else if (pendingSubagent) runStatus = "idle";
     else if (status === "submitted") runStatus = "thinking";
     else if (status === "streaming") runStatus = "streaming";
@@ -135,7 +138,7 @@ function Bridge({ sessionId, openAiDiffTab, closeAiDiffTab }: BridgeProps) {
       ...(runStatus === "idle" || runStatus === "error" ? { step: null } : {}),
       ...(runStatus === "idle" ? { error: null } : {}),
     });
-  }, [status, approvalsPending, patch]);
+  }, [status, approvalsPending, patch, permissionMode]);
 
   useEffect(() => {
     if (approvalsPending > 0 && permissionMode === "default") openRightPanel();

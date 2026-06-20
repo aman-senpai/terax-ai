@@ -1,4 +1,8 @@
 import type { UIMessage } from "@ai-sdk/react";
+import {
+  getAutocompleteSystemPrompt,
+  getAutocompleteUserPrompt,
+} from "@/modules/ai/lib/prompts";
 
 export type ChatCompletionRequest = {
   /** The user's current partial input (before the cursor). */
@@ -67,41 +71,7 @@ function extractMessageText(msg: UIMessage): string {
   return "";
 }
 
-export const CHAT_COMPLETION_SYSTEM_PROMPT = `You perform inline chat message completion. Given a conversation and the user's partial message, predict how they will finish their thought.
-
-You receive:
-- CONVERSATION: recent messages between the user and assistant
-- PARTIAL: the user's current message (text before the cursor)
-
-Your output is the most likely continuation of PARTIAL. The completed message must sound natural — as if the user wrote it themselves.
-
-Hard rules:
-1. NEVER repeat text already in PARTIAL.
-2. Write in the user's voice and style, matching the conversation tone.
-3. Complete the current thought or sentence. 1–2 sentences max.
-4. Output empty string when no confident completion exists — never guess.
-5. Output format: raw continuation text only. No markdown fences. No commentary. No "Here is".
-
-Examples:
-
-CONVERSATION:
-User: can you help me write a function that
-Assistant: Sure, what should the function do?
-
-PARTIAL: sorts an array of
-OUTPUT: objects by a given key
-
-CONVERSATION:
-User: what's the best way to handle errors in
-Assistant: In what context?
-
-PARTIAL: a react
-OUTPUT: server component?
-
-CONVERSATION:
-User: explain how closures work in
-PARTIAL: JavaScript
-OUTPUT:  with examples`;
+export const CHAT_COMPLETION_SYSTEM_PROMPT = getAutocompleteSystemPrompt();
 
 export function buildChatUserPrompt(req: ChatCompletionRequest): string {
   const prefix =
@@ -121,12 +91,11 @@ export function buildChatUserPrompt(req: ChatCompletionRequest): string {
 
   const suffixBlock = suffix ? `\n\nAFTER CURSOR:\n<<<\n${suffix}\n>>>` : "";
 
-  return `${convBlock}PARTIAL:
-<<<
-${prefix}
->>>${suffixBlock}
-
-Continue the user's message.`;
+  const template = getAutocompleteUserPrompt();
+  return template
+    .replace("{context}", convBlock)
+    .replace("{prefix}", prefix)
+    .replace("{suffix}", suffixBlock);
 }
 
 function capitalize(s: string): string {

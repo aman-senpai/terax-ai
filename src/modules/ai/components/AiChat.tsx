@@ -45,6 +45,8 @@ import type {
 } from "ai";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AiToolApproval } from "./AiToolApproval";
+import { resolveToolPolicy } from "../lib/permissions";
+import { getContinueMessage } from "../lib/prompts";
 
 function CommandSnippet({ name }: { name: string }) {
   const meta = SLASH_COMMANDS[name];
@@ -302,9 +304,7 @@ export function AiChatView({
           <ContinueRow
             onContinue={() => {
               patchAgentMeta({ hitStepCap: false });
-              void sendMessage(
-                "Continue from where you stopped. Don't recap — just keep going.",
-              );
+              void sendMessage(getContinueMessage());
             }}
           />
         )}
@@ -791,19 +791,27 @@ const RenderedTool = memo(function RenderedTool({
       ? part.toolName
       : part.type.replace(/^tool-/, "");
 
+  const policy = useMemo(
+    () =>
+      part.state === "approval-requested"
+        ? resolveToolPolicy(toolName, permissionMode, part.input)
+        : null,
+    [part.state, toolName, permissionMode, part.input],
+  );
+
   useEffect(() => {
     if (part.state !== "approval-requested") return;
-    if (permissionMode === "default") return;
+    if (policy === "ask") return;
     const approval = part.approval;
     if (!approval) return;
     if (respondedRef.current) return;
     respondedRef.current = true;
-    onApprovalRef.current(approval.id, permissionMode === "auto-approve");
-  }, [permissionMode, part.approval?.id, part.state]);
+    onApprovalRef.current(approval.id, policy === "auto-approve");
+  }, [policy, part.approval?.id, part.state]);
 
   if (part.state === "approval-requested") {
-    if (permissionMode !== "default" && respondedRef.current) {
-      return <AutoApprovalBadge approved={permissionMode === "auto-approve"} />;
+    if (policy !== "ask" && respondedRef.current) {
+      return <AutoApprovalBadge approved={policy === "auto-approve"} />;
     }
     return (
       <AiToolApproval

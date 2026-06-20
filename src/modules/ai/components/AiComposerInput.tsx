@@ -514,7 +514,29 @@ export function AiComposerInput() {
                     return;
                   }
                 }
-                if (e.key === "Enter" && !e.shiftKey) {
+                if (e.key === "Enter") {
+                  if (e.shiftKey) {
+                    // Shift+Enter inserts a newline at the cursor
+                    e.preventDefault();
+                    cancelAutocomplete();
+                    const el = editorRef.current;
+                    if (!el) return;
+                    const sel = window.getSelection();
+                    if (!sel || !sel.rangeCount) return;
+                    const range = sel.getRangeAt(0);
+                    if (!el.contains(range.startContainer)) return;
+                    range.deleteContents();
+                    const nl = document.createTextNode("\n");
+                    range.insertNode(nl);
+                    range.setStartAfter(nl);
+                    range.collapse(true);
+                    sel.removeAllRanges();
+                    sel.addRange(range);
+                    // Sync the plain-text value
+                    syncing.current = true;
+                    c.setValue(editorToText(el));
+                    return;
+                  }
                   e.preventDefault();
                   cancelAutocomplete();
                   c.submit();

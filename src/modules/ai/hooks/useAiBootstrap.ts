@@ -7,6 +7,7 @@ import {
   getAllKeys,
   hasAnyKey,
 } from "../lib/keyring";
+import { applyOverrides } from "../lib/prompts";
 import { useAgentsStore } from "../store/agentsStore";
 import { useChatStore } from "../store/chatStore";
 import { useSnippetsStore } from "../store/snippetsStore";
@@ -107,6 +108,15 @@ export function useAiBootstrap(): {
     void useAgentsStore.getState().hydrate();
     void useSnippetsStore.getState().hydrate();
   }, [hydrateSessions]);
+
+  // Sync prompt overrides from settings → prompts module.
+  const promptOverrides = usePreferencesStore((s) => s.promptOverrides);
+  useEffect(() => {
+    if (!prefsHydrated) return;
+    if (Object.keys(promptOverrides).length > 0) {
+      applyOverrides(promptOverrides);
+    }
+  }, [prefsHydrated, promptOverrides]);
 
   return { hasComposer, keysLoaded };
 }

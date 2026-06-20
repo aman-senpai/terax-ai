@@ -22,6 +22,8 @@ import type { ToolContext } from "../tools/tools";
 import { type AgentUsageDelta, runAgentStream } from "./agent";
 import type { CustomEndpointKeys, ProviderKeys } from "./keyring";
 import { native } from "./native";
+import { getSkills } from "../skills/skills";
+import { applyOverrides, type PromptKey } from "./prompts";
 
 const XTERAX_MD_MAX_BYTES = 32 * 1024;
 type MemoryCacheEntry = { content: string | null; mtime: number };
@@ -217,6 +219,17 @@ export function createContextAwareTransport(deps: Deps) {
     }
     await observeLatestUserMessage(options.messages, projectRoot);
     if (projectRoot) notifyUserMessageSent(projectRoot);
+
+    // Discover agent skills (cached per workspace root).
+    const skills = live.workspaceRoot
+      ? await getSkills(live.workspaceRoot)
+      : null;
+
+    // Load prompt overrides from .xterax/prompts/ (cached per workspace).
+    if (live.workspaceRoot) {
+      await loadPromptOverridesForWorkspace(live.workspaceRoot);
+    }
+
     const projectMemory = await readXteraxMd(live.workspaceRoot);
     const profileArtifacts = projectRoot
       ? await loadProfileArtifacts(projectRoot, 4000)
@@ -295,6 +308,7 @@ export function createContextAwareTransport(deps: Deps) {
         "off") as import("./thinking").ThinkingLevel,
       projectMemory,
       profileContent,
+      skills,
       uiMessages: messagesForRun,
       abortSignal: options.abortSignal,
     });
@@ -384,4 +398,54 @@ export const CONTEXT_BLOCK_RE =
 
 export function stripContextBlock(text: string): string {
   return text.replace(CONTEXT_BLOCK_RE, "");
+}
+
+// ---------------------------------------------------------------------------
+// Prompt override loading
+// ---------------------------------------------------------------------------
+
+const promptOverridesLoaded = new Set<string>();
+
+/**
+ * Load prompt overrides from `.xterax/prompts/<key>.md` for the given
+ * workspace root. Idempotent per workspace root — subsequent calls are
+ * no-ops. Reads are best-effort; failures are silently ignored.
+ */
+async function loadPromptOverridesForWorkspace(
+  workspaceRoot: string,
+): Promise<void> {
+  if (promptOverridesLoaded.has(workspaceRoot)) return;
+  promptOverridesLoaded.add(workspaceRoot);
+
+  const promptsDir = `${workspaceRoot.replace(/\/$/, "")}/.xterax/prompts`;
+  const keyToFileName = (k: string) => k.replace(/:/g, "-");
+
+  // Build a map of known prompt keys to their file names.
+  const overrides: Partial<Record<string, string>> = {};
+
+  // Try to read each known prompt key's override file.
+  const promptKeys = [
+    "system", "system-lite", "engineering-profile", "plan-mode",
+    "subagent-system", "title-generation", "autocomplete-system",
+    "autocomplete-user", "init-command", "claude-code-directive",
+    "continue-message", "elision-text",
+    "agent-coder", "agent-architect", "agent-reviewer",
+    "agent-security", "agent-designer", "skills-preamble",
+  ];
+
+  for (const key of promptKeys) {
+    try {
+      const filePath = `${promptsDir}/${keyToFileName(key)}.md`;
+      const result = await native.readFile(filePath);
+      if (result.kind === "text" && result.content.trim()) {
+        overrides[key] = result.content.trim();
+      }
+    } catch {
+      // File doesn't exist or isn't readable — skip
+    }
+  }
+
+  if (Object.keys(overrides).length > 0) {
+    applyOverrides(overrides as Partial<Record<PromptKey, string>>);
+  }
 }

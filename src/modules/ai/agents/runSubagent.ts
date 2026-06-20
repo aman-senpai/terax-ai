@@ -13,6 +13,7 @@ import { buildEditTools } from "../tools/edit";
 import { buildShellTools } from "../tools/shell";
 import { useChatStore, type PermissionMode } from "../store/chatStore";
 import { usePreferencesStore } from "@/modules/settings/preferences";
+import { resolveToolPolicy } from "../lib/permissions";
 import {
   pushToolStep,
   pushToolResult,
@@ -220,8 +221,16 @@ function buildSubagentToolSet(
         return originalExecute(args);
       }
 
-      // default mode: require user approval.
+      // default mode: consult per-tool permissions and shell allowlist.
       if (isMutation) {
+        const policy = resolveToolPolicy(name, permissionMode, args);
+        if (policy === "auto-approve") return originalExecute(args);
+        if (policy === "deny") {
+          return {
+            error: `Denied by permissions: "${name}"`,
+            denied: true,
+          };
+        }
         const approved = await pushApprovalRequired(jobId, idx, name, args);
         if (!approved) {
           return { denied: true, message: "User denied this tool call." };

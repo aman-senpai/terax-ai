@@ -6,6 +6,7 @@ import {
 import { getModel, providerNeedsKey, type ModelId } from "../config";
 import { usePreferencesStore } from "@/modules/settings/preferences";
 import { BUILTIN_AGENTS } from "../lib/agents";
+import { getAgentPrompt } from "../lib/prompts";
 import { useAgentsStore } from "./agentsStore";
 import { usePlanStore } from "./planStore";
 import { createContextAwareTransport } from "../lib/transport";
@@ -48,7 +49,13 @@ function makeChat(sessionId: string): Chat<UIMessage> {
       const { activeId, customAgents } = useAgentsStore.getState();
       const all = [...BUILTIN_AGENTS, ...customAgents];
       const a = all.find((x) => x.id === activeId) ?? BUILTIN_AGENTS[0];
-      return { name: a.name, instructions: a.instructions };
+      // For built-in agents, resolve instructions via the prompts module so
+      // user overrides from .xterax/prompts/agent:<id>.md take effect.
+      // Custom agents keep their stored instructions as-is.
+      const instructions = a.builtIn
+        ? getAgentPrompt(a.id.replace("builtin:", ""))
+        : a.instructions;
+      return { name: a.name, instructions };
     },
     getProjectRoot: () => useChatStore.getState().live.getProjectRoot(),
     getLive: () => {

@@ -2,6 +2,7 @@ import type { UIMessage } from "@ai-sdk/react";
 import { LazyStore } from "@tauri-apps/plugin-store";
 import type { CustomEndpoint } from "../config";
 import type { CustomEndpointKeys, ProviderKeys } from "./keyring";
+import { getTitleGenerationPrompt } from "./prompts";
 
 export type SessionMeta = {
   id: string;
@@ -95,16 +96,6 @@ export type TitleGenLocalConfig = {
   customEndpointKeys?: CustomEndpointKeys;
 };
 
-const TITLE_SYSTEM = `You create concise, informative titles for AI chat threads.
-
-Given the start of a conversation, reply with exactly one title of 3-8 words that captures the user's intent or topic.
-
-Rules:
-- Be specific; include key entities or actions when clear.
-- Avoid starting with "Help", "Question", "How to", "Chat", "New".
-- No quotes, no trailing punctuation, no markdown.
-- Output only the title on a single line.`;
-
 export async function generateSessionTitle(
   messages: UIMessage[],
   modelId: string,
@@ -134,7 +125,7 @@ export async function generateSessionTitle(
 
     const { text } = await generateText({
       model,
-      system: TITLE_SYSTEM,
+      system: getTitleGenerationPrompt(),
       prompt: context,
       maxOutputTokens: 40,
       temperature: 0.2,

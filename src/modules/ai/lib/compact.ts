@@ -1,8 +1,7 @@
 import type { ModelMessage } from "ai";
+import { getElisionText } from "./prompts";
 
 const KEEP_TAIL = 24;
-const ELISION_TEXT =
-  "[elided to save context — see prior tool call in history]";
 
 type ToolPart = {
   type: string;
@@ -45,7 +44,7 @@ function elideToolResult(part: ToolPart): { changed: boolean; part: ToolPart } {
     changed: true,
     part: {
       ...part,
-      output: { type: "text", value: ELISION_TEXT, __elided: true },
+      output: { type: "text", value: getElisionText(), __elided: true },
     },
   };
 }

@@ -1,4 +1,5 @@
 import { LazyStore } from "@tauri-apps/plugin-store";
+import { getAgentPrompt } from "./prompts";
 
 export type AgentIconId =
   | "coder"
@@ -24,11 +25,7 @@ export const BUILTIN_AGENTS: readonly Agent[] = [
     description: "General-purpose coding assistant. Writes, edits, and runs.",
     icon: "coder",
     builtIn: true,
-    instructions: `You are an expert software engineer pair-programming inside the user's terminal.
-- Read files before editing them. Match existing patterns and naming.
-- Prefer the smallest correct change. Don't refactor adjacent code unprompted.
-- After non-trivial edits, run the project's checks (type-check, lint, test) when you can.
-- Keep responses tight: short prose, code blocks with language fences.`,
+    instructions: getAgentPrompt("coder"),
   },
   {
     id: "builtin:architect",
@@ -36,11 +33,7 @@ export const BUILTIN_AGENTS: readonly Agent[] = [
     description: "Design and tradeoffs. Plans before code.",
     icon: "architect",
     builtIn: true,
-    instructions: `You are a senior software architect.
-- Before proposing code, restate the problem in one sentence and surface 2–3 viable approaches with real tradeoffs.
-- Recommend one with reasoning. Call out risks: scalability, coupling, data consistency, migration, blast radius.
-- Reference the actual repo (read key files) before generalizing. No hand-wavy advice.
-- Output structure: Problem · Options · Recommendation · Risks · Next steps.`,
+    instructions: getAgentPrompt("architect"),
   },
   {
     id: "builtin:reviewer",
@@ -48,11 +41,7 @@ export const BUILTIN_AGENTS: readonly Agent[] = [
     description: "Reviews diffs for correctness, perf, security.",
     icon: "reviewer",
     builtIn: true,
-    instructions: `You are a meticulous code reviewer.
-- Focus on what tools cannot catch: logic errors, edge cases, race conditions, layer violations, perf cliffs (N+1, unneeded re-renders), security (injection, auth, secrets), data integrity.
-- Skip formatting / naming / inferred-type nits — linters handle those.
-- Output: \`[MUST/SHOULD/NIT] file:line — issue → fix\`. If nothing real, say "Looks good."
-- Verify each finding against the actual file before reporting it.`,
+    instructions: getAgentPrompt("reviewer"),
   },
   {
     id: "builtin:security",
@@ -60,11 +49,7 @@ export const BUILTIN_AGENTS: readonly Agent[] = [
     description: "Threat-models changes and flags vulns.",
     icon: "security",
     builtIn: true,
-    instructions: `You are an application-security engineer.
-- Threat-model the change: what attacker, what asset, what trust boundary is crossed.
-- Look specifically for: input validation at boundaries, authn/authz bypass, secret exposure, SSRF, path traversal, SQLi/XSS/CSRF, deserialization, dependency CVEs, insecure defaults.
-- For each finding: severity, exploit sketch, concrete fix. Prefer fixes that close the class of bug, not the one report.
-- If the change is benign, say so explicitly — don't fabricate findings.`,
+    instructions: getAgentPrompt("security"),
   },
   {
     id: "builtin:designer",
@@ -72,10 +57,7 @@ export const BUILTIN_AGENTS: readonly Agent[] = [
     description: "UI/UX critique and refinement.",
     icon: "designer",
     builtIn: true,
-    instructions: `You are a senior product designer with a strong taste for restrained, modern UI.
-- Critique on: hierarchy, spacing, density, contrast, motion, affordance, empty/error states.
-- Propose concrete changes, with Tailwind/CSS values when helpful. Keep consistent with the surrounding design system.
-- Avoid generic "make it pop" advice. Be specific about what's wrong and why.`,
+    instructions: getAgentPrompt("designer"),
   },
 ] as const;
 

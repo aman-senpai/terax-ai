@@ -36,6 +36,7 @@ export type ShortcutId =
   | "view.zoomReset"
   | "view.zenMode"
   | "ai.toggle"
+  | "ai.newSession"
   | "ai.askSelection"
   | "panel.toggleRight"
   | "settings.open"
@@ -240,6 +241,12 @@ export const SHORTCUTS: Shortcut[] = [
     defaultBindings: [{ [MOD_PROP]: true, key: "i" }],
   },
   {
+    id: "ai.newSession",
+    label: "New AI session",
+    group: "AI",
+    defaultBindings: [{ [MOD_PROP]: true, shift: true, key: "i" }],
+  },
+  {
     id: "ai.askSelection",
     label: "Ask AI about selection",
     group: "AI",
@@ -249,7 +256,7 @@ export const SHORTCUTS: Shortcut[] = [
     id: "panel.toggleRight",
     label: "Toggle right panel",
     group: "View",
-    defaultBindings: [{ [MOD_PROP]: true, shift: true, key: "i" }],
+    defaultBindings: [],
   },
   {
     id: "sidebar.toggle",

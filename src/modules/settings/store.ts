@@ -90,6 +90,7 @@ export type Preferences = {
   defaultThinkingLevel: ThinkingLevel;
   editorTheme: EditorThemeId;
   customInstructions: string;
+  promptOverrides: Record<string, string>;
   autostart: boolean;
   restoreWindowState: boolean;
   autocompleteEnabled: boolean;
@@ -144,6 +145,7 @@ const KEY_DEFAULT_MODEL = "defaultModelId";
 const KEY_DEFAULT_THINKING_LEVEL = "defaultThinkingLevel";
 const KEY_EDITOR_THEME = "editorTheme";
 const KEY_CUSTOM_INSTRUCTIONS = "customInstructions";
+const KEY_PROMPT_OVERRIDES = "promptOverrides";
 const KEY_AUTOSTART = "autostart";
 const KEY_RESTORE_WINDOW = "restoreWindowState";
 const KEY_AUTOCOMPLETE_ENABLED = "autocompleteEnabled";
@@ -242,6 +244,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   defaultThinkingLevel: DEFAULT_THINKING_LEVEL,
   editorTheme: "atomone",
   customInstructions: "",
+  promptOverrides: {},
   autostart: false,
   restoreWindowState: true,
   autocompleteEnabled: false,
@@ -333,6 +336,9 @@ export async function loadPreferences(): Promise<Preferences> {
     customInstructions:
       get<string>(KEY_CUSTOM_INSTRUCTIONS) ??
       DEFAULT_PREFERENCES.customInstructions,
+    promptOverrides:
+      get<Record<string, string>>(KEY_PROMPT_OVERRIDES) ??
+      DEFAULT_PREFERENCES.promptOverrides,
     autostart: get<boolean>(KEY_AUTOSTART) ?? DEFAULT_PREFERENCES.autostart,
     restoreWindowState:
       get<boolean>(KEY_RESTORE_WINDOW) ??
@@ -508,6 +514,12 @@ export async function setEditorTheme(value: EditorThemeId): Promise<void> {
 
 export async function setCustomInstructions(value: string): Promise<void> {
   await writePref(KEY_CUSTOM_INSTRUCTIONS, value);
+}
+
+export async function setPromptOverrides(
+  value: Record<string, string>,
+): Promise<void> {
+  await writePref(KEY_PROMPT_OVERRIDES, value);
 }
 
 export async function setAutostart(value: boolean): Promise<void> {
@@ -736,6 +748,7 @@ export async function onPreferencesChange(
     [KEY_DEFAULT_THINKING_LEVEL]: "defaultThinkingLevel",
     [KEY_EDITOR_THEME]: "editorTheme",
     [KEY_CUSTOM_INSTRUCTIONS]: "customInstructions",
+    [KEY_PROMPT_OVERRIDES]: "promptOverrides",
     [KEY_AUTOSTART]: "autostart",
     [KEY_RESTORE_WINDOW]: "restoreWindowState",
     [KEY_AUTOCOMPLETE_ENABLED]: "autocompleteEnabled",

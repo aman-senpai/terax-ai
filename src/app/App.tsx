@@ -273,6 +273,7 @@ export default function App() {
   const openRightPanel = useChatStore((s) => s.openRightPanel);
   const rightPanelOpen = useChatStore((s) => s.rightPanelOpen);
   const toggleRightPanel = useChatStore((s) => s.toggleRightPanel);
+  const newSession = useChatStore((s) => s.newSession);
 
   const rightPanelRef = useRef<PanelImperativeHandle | null>(null);
   const rightPanelWidthRef = useRef(readRightPanelWidth());
@@ -437,11 +438,16 @@ export default function App() {
     }
     if (rightPanelOpen) {
       useChatStore.getState().closeRightPanel();
+      // Return focus to the active terminal when dismissing the AI panel.
+      const tab = tabs.find((x) => x.id === activeId);
+      if (tab?.kind === "terminal" && tab.activeLeafId !== null) {
+        terminalRefs.current.get(tab.activeLeafId)?.focus();
+      }
     } else {
       openRightPanel();
       focusInput(null);
     }
-  }, [hasComposer, rightPanelOpen, openRightPanel, focusInput]);
+  }, [hasComposer, rightPanelOpen, openRightPanel, focusInput, tabs, activeId, terminalRefs]);
 
   const attachSelection = useChatStore((s) => s.attachSelection);
 
@@ -677,6 +683,13 @@ export default function App() {
       "search.focus": () => searchInlineRef.current?.focus(),
       "explorer.search": () => openCommandPalette("content"),
       "ai.toggle": toggleRightPanelAndFocus,
+      "ai.newSession": () => {
+        newSession();
+        if (!rightPanelOpen) {
+          openRightPanel();
+        }
+        focusInput(null);
+      },
       "ai.askSelection": askFromSelection,
       "panel.toggleRight": toggleRightPanel,
       "settings.open": () => void openSettingsWindow(),
@@ -704,6 +717,10 @@ export default function App() {
       focusNextPaneInTab,
       toggleSourceControl,
       toggleRightPanelAndFocus,
+      newSession,
+      openRightPanel,
+      focusInput,
+      rightPanelOpen,
       askFromSelection,
       toggleSidebar,
       toggleExplorerFocus,

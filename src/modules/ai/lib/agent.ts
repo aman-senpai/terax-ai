@@ -23,6 +23,8 @@ import {
   type CustomEndpoint,
   type ProviderId,
 } from "../config";
+import { getPlanModePrompt, getPrompt, PromptKey } from "./prompts";
+import type { SkillMeta } from "../skills/skills";
 import {
   buildThinkingProviderOptions,
   DEFAULT_THINKING_LEVEL,
@@ -313,8 +315,15 @@ export function buildConfiguredLanguageModel(
   });
 }
 
-const PLAN_MODE_PROMPT = `## PLAN MODE — ACTIVE
-Mutating tools (write_file, edit, multi_edit, create_directory) will queue their changes for the user to review as a single diff. Do NOT execute bash_run or bash_background while plan mode is active — restrict yourself to reads (read_file, grep, glob, list_directory) and the queued mutations. After queueing the full set of edits, stop and return a brief summary; do not continue acting until the user has accepted/rejected.`;
+
+function buildSkillBlock(skills: SkillMeta[] | null | undefined): string {
+  if (!skills || skills.length === 0) return "";
+  const preamble = getPrompt(PromptKey.SkillsPreamble);
+  const catalog = skills
+    .map((s) => `- **${s.name}**: ${s.description}\n  Location: ${s.location}`)
+    .join("\n");
+  return `\n\n${preamble.replace("{catalog}", catalog)}`;
+}
 
 function buildStableSystem(
   modelId: string,
@@ -322,8 +331,10 @@ function buildStableSystem(
   customInstructions: string | undefined,
   projectMemory: string | null,
   profileContent: string | null,
+  skills?: SkillMeta[] | null,
 ): string {
   const base = selectSystemPrompt(modelId);
+  const skillsBlock = buildSkillBlock(skills);
   const personaBlock = persona?.instructions.trim()
     ? `\n\n## ACTIVE AGENT — ${persona.name}\n${persona.instructions.trim()}`
     : "";
@@ -338,7 +349,7 @@ function buildStableSystem(
     profileContent && profileContent.trim().length > 0
       ? `\n\n## PROJECT PROFILE — .xterax/profile.md\n${profileContent.trim()}`
       : "";
-  return `${base}${memoryBlock}${profileBlock}${personaBlock}${customBlock}`;
+  return `${base}${skillsBlock}${memoryBlock}${profileBlock}${personaBlock}${customBlock}`;
 }
 
 // OpenAI / Gemini / DeepSeek apply prefix caching automatically; only
@@ -421,6 +432,8 @@ export type RunAgentOptions = {
   planMode?: boolean;
   projectMemory?: string | null;
   profileContent?: string | null;
+  /** Discovered agent skills for this workspace. Injected into system prompt. */
+  skills?: SkillMeta[] | null;
   uiMessages: UIMessage[];
   abortSignal?: AbortSignal;
   thinkingLevel?: ThinkingLevel;
@@ -451,6 +464,7 @@ export async function runAgentStream(opts: RunAgentOptions) {
     opts.customInstructions,
     opts.projectMemory ?? null,
     opts.profileContent ?? null,
+    opts.skills,
   );
 
   const history = await convertToModelMessages(opts.uiMessages);
@@ -475,7 +489,7 @@ export async function runAgentStream(opts: RunAgentOptions) {
 
   const messages: ModelMessage[] = [{ role: "system", content: stableSystem }];
   if (opts.planMode) {
-    messages.push({ role: "system", content: PLAN_MODE_PROMPT });
+    messages.push({ role: "system", content: getPlanModePrompt() });
   }
   messages.push(...compactedHistory);
 

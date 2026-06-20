@@ -91,11 +91,19 @@ export function AiComposerProvider({ children }: ProviderProps) {
     }
   }, [focusSignal, pendingPrefill, consumePrefill]);
 
-  // Re-focus the textarea whenever the agent finishes a response
+  // Re-focus the textarea when the agent finishes — but only if the user
+  // hasn't moved focus elsewhere (e.g. terminal, editor). Otherwise the
+  // agent would steal focus every time it completes a tool call or response.
   const prevIsBusyRef = useRef(false);
   useEffect(() => {
     if (prevIsBusyRef.current && !isBusy) {
-      requestAnimationFrame(() => textareaRef.current?.focus());
+      const el = document.activeElement;
+      const ta = textareaRef.current;
+      // Auto-focus only when nothing is focused, body is focused, or focus
+      // is already inside the composer textarea itself.
+      if (!el || el === document.body || (ta && ta.contains(el))) {
+        requestAnimationFrame(() => ta?.focus());
+      }
     }
     prevIsBusyRef.current = isBusy;
   }, [isBusy, textareaRef]);
@@ -235,6 +243,9 @@ export function AiComposerProvider({ children }: ProviderProps) {
       const outcome = tryRunSlashCommand(commandSource);
       if (outcome.kind === "handled") {
         setValue("");
+        // Clear picked commands so a handled toggle command (e.g. /plan)
+        // doesn't persist and intercept the next submitted message.
+        setPickedCommands([]);
         if (outcome.toast) console.info(outcome.toast);
         return;
       }
